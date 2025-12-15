@@ -29,6 +29,16 @@ export async function applyAbilityEffect(abilityRow, ownerKey, sourceImg = null)
     try {
       const result = await globalThis.applyAbilityEffectFromCsv(effectState, pk, abilityRow, { sourceImg });
       showPopup(`Used ability: ${abilityRow.abilityName || 'Unknown'}`);
+      if (globalThis.logEvent) {
+        const owner = ownerKey === 'p1' || ownerKey === 'player1' ? 'player1' : 'player2';
+        const abilityType = abilityRow.abilityType === 'passive' ? 'passive ability' : 'ability';
+        globalThis.logEvent({
+          player: owner,
+          text: `Used ${abilityType}: ${abilityRow.abilityName || 'Unknown'}`,
+          cardSet: sourceImg?.dataset?.set,
+          cardNum: sourceImg?.dataset?.num
+        });
+      }
       
       if (typeof zoomBackdrop !== 'undefined' && zoomBackdrop.classList.contains('show')) {
         zoomBackdrop.classList.remove('show');

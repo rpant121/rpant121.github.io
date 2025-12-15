@@ -753,7 +753,7 @@ A4a,15,Tentacool,Poison Sting,inflict_status,poisoned,,Your opponent's Active Po
 A4a,16,Tentacruel,Stun Poison,flip_inflict_status_both,poisoned_paralyzed,,"Flip a coin. If heads, your opponent's Active Pokémon is now Poisoned and Paralyzed.",50.0,50.0
 A4a,18,Slowking,Litter,discard_tools_for_damage,2,,Discard up to 2 Pokémon Tool cards from your hand. This attack does 50 damage for each card you discarded in this way.,50.0,50.0
 A4a,19,Jynx,Dazzle Dance,inflict_status,confused,,Your opponent's Active Pokémon is now Confused.,40.0,40.0
-A4a,20,Suicune ex,Crystal Waltz,bonus_damage_for_each_bench,20,,This attack does 20 damage for each Benched Pokémon (both yours and your opponent's).,20.0,20.0
+A4a,20,Suicune ex,Crystal Waltz,bonus_damage_for_each_bench,20,,This attack does 20 damage for each Benched Pokémon (both yours and your opponent's).,,
 A4a,21,Feebas,Leap Out,switch_self_with_bench,,,Switch this Pokémon with 1 of your Benched Pokémon.,,
 A4a,23,Mantyke,Splashy Toss,attach_energy_from_zone,w,,Take a {W} Energy from your Energy Zone and attach it to 1 of your Benched Basic Pokémon.,,
 A4a,24,Cryogonal,Ice Blade,bench_damage_one,40,,This attack does 40 damage to 1 of your opponent's Pokémon.,,
@@ -784,14 +784,14 @@ A4a,76,Phanpy,Flail,damage_equal_to_self_damage,,,This attack does damage to you
 A4a,77,Azurill,Squishy Healing,heal_bench_one,50,,Heal 50 damage from 1 of your Benched Pokémon.,,
 A4a,78,Jumpluff ex,Breeze-By Attack,switch_self_with_bench,,,You may switch this Pokémon with 1 of your Benched Pokémon.,70.0,70.0
 A4a,79,Entei ex,Blazing Beatdown,extra_damage_if_extra_energy_attached,2|60,r,"If this Pokémon has at least 2 extra {R} Energy attached, this attack does 60 more damage.",60.0,60.0
-A4a,80,Suicune ex,Crystal Waltz,bonus_damage_for_each_bench,20,,This attack does 20 damage for each Benched Pokémon (both yours and your opponent's).,20.0,20.0
+A4a,80,Suicune ex,Crystal Waltz,bonus_damage_for_each_bench,20,,This attack does 20 damage for each Benched Pokémon (both yours and your opponent's).,,,
 A4a,81,Raikou ex,Voltaic Bullet,bench_damage_one,10,,This attack also does 10 damage to 1 of your opponent's Benched Pokémon.,60.0,60.0
 A4a,82,Poliwrath ex,Hydro Knuckle,bonus_damage_per_energy_attached,w,40,"If this Pokémon has any {W} Energy attached, this attack does 40 more damage.",100.0,100.0
 A4a,86,Jumpluff ex,Breeze-By Attack,switch_self_with_bench,,,You may switch this Pokémon with 1 of your Benched Pokémon.,70.0,70.0
 A4a,87,Entei ex,Blazing Beatdown,extra_damage_if_extra_energy_attached,2|60,r,"If this Pokémon has at least 2 extra {R} Energy attached, this attack does 60 more damage.",60.0,60.0
 A4a,88,Raikou ex,Voltaic Bullet,bench_damage_one,10,,This attack also does 10 damage to 1 of your opponent's Benched Pokémon.,60.0,60.0
 A4a,89,Poliwrath ex,Hydro Knuckle,bonus_damage_per_energy_attached,w,40,"If this Pokémon has any {W} Energy attached, this attack does 40 more damage.",100.0,100.0
-A4a,90,Suicune ex,Crystal Waltz,bonus_damage_for_each_bench,20,,This attack does 20 damage for each Benched Pokémon (both yours and your opponent's).,20.0,20.0
+A4a,90,Suicune ex,Crystal Waltz,bonus_damage_for_each_bench,20,,This attack does 20 damage for each Benched Pokémon (both yours and your opponent's).,,
 A4a,93,Psyduck,Headache,prevent_supporter_next_turn,,,Your opponent can't use any Supporter cards from their hand during their next turn.,10.0,10.0
 A4a,96,Kingler,KO Crab,flip_both_heads_bonus,80,,"Flip 2 coins. If both of them are heads, this attack does 80 more damage.",80.0,80.0
 A4a,100,Paldean Wooper,Poison Jab,inflict_status,poisoned,,Your opponent's Active Pokémon is now Poisoned.,10.0,10.0

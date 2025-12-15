@@ -1205,6 +1205,15 @@ const TRAINER_EFFECTS = {
         }
         
           showPopup(`Found ${card.name}!`);
+          if (globalThis.logEvent) {
+            const owner = pk === 'p1' ? 'player1' : 'player2';
+            globalThis.logEvent({
+              player: owner,
+              text: `Found ${card.name} from deck search`,
+              cardSet: card.set,
+              cardNum: card.number || card.num
+            });
+          }
           return;
         }
     }
@@ -2895,6 +2904,15 @@ const TRAINER_EFFECTS = {
       }
       
       showPopup(`Found ${chosen.name}! Added to hand.`);
+      if (globalThis.logEvent) {
+        const owner = pk === 'p1' ? 'player1' : 'player2';
+        globalThis.logEvent({
+          player: owner,
+          text: `Found ${chosen.name} from deck search`,
+          cardSet: chosen.set,
+          cardNum: chosen.number || chosen.num
+        });
+      }
     }
   },
   
@@ -4206,6 +4224,17 @@ const TRAINER_EFFECTS = {
     if (globalThis.updateDeckBubbles) globalThis.updateDeckBubbles();
     
     showPopup(`May: Added ${chosen.length} Pokémon to hand!`);
+    if (globalThis.logEvent && chosen.length > 0) {
+      const owner = pk === 'p1' ? 'player1' : 'player2';
+      for (const card of chosen) {
+        globalThis.logEvent({
+          player: owner,
+          text: `Found ${card.name} from deck search`,
+          cardSet: card.set,
+          cardNum: card.number || card.num
+        });
+      }
+    }
     
 
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -5897,6 +5926,15 @@ const MOVE_HANDLERS = {
       }
       
       showPopup(`Found ${chosen.name}.`);
+      if (globalThis.logEvent) {
+        const owner = pk === 'p1' ? 'player1' : 'player2';
+        globalThis.logEvent({
+          player: owner,
+          text: `Found ${chosen.name} from deck search`,
+          cardSet: chosen.set,
+          cardNum: chosen.number || chosen.num
+        });
+      }
     }
   },
   
@@ -5911,6 +5949,15 @@ const MOVE_HANDLERS = {
     const card = deck.splice(idx, 1)[0];
     (s[pk].bench ??= []).push(card);
     showPopup(`Put ${card.name} on bench.`);
+    if (globalThis.logEvent) {
+      const owner = pk === 'p1' ? 'player1' : 'player2';
+      globalThis.logEvent({
+        player: owner,
+        text: `Found ${card.name} from deck search and put on bench`,
+        cardSet: card.set,
+        cardNum: card.number || card.num
+      });
+    }
   },
   
   reveal_opponent_hand: async (s, pk, p, ctx) => {
@@ -6400,6 +6447,15 @@ const MOVE_HANDLERS = {
       
       showPopup(`Put ${chosen.name} onto the Bench!`);
       globalThis.addLog?.(pk, `put <b>${chosen.name}</b> onto the Bench`, chosen.image, chosen);
+      if (globalThis.logEvent) {
+        const owner = pk === 'p1' ? 'player1' : 'player2';
+        globalThis.logEvent({
+          player: owner,
+          text: `Found ${chosen.name} from deck search and put on bench`,
+          cardSet: chosen.set,
+          cardNum: chosen.num
+        });
+      }
     } catch (err) {
       console.error('[search_basic_to_bench] Failed to place:', err);
       showPopup('Failed to place Pokémon.');
@@ -7760,6 +7816,15 @@ const MOVE_HANDLERS = {
       }
       if (globalThis.updateDeckBubbles) {
         globalThis.updateDeckBubbles();
+      }
+      if (globalThis.logEvent) {
+        const owner = pk === 'p1' ? 'player1' : 'player2';
+        globalThis.logEvent({
+          player: owner,
+          text: `Found ${chosen.meta.name} from deck search`,
+          cardSet: chosen.card.set,
+          cardNum: chosen.card.number || chosen.card.num
+        });
       }
     }
   },
@@ -12100,6 +12165,15 @@ const ABILITY_HANDLERS = {
       }
       
       showPopup(`Illuminate: Found ${chosen.name}!`);
+      if (globalThis.logEvent) {
+        const owner = pk === 'p1' ? 'player1' : 'player2';
+        globalThis.logEvent({
+          player: owner,
+          text: `Found ${chosen.name} from deck search`,
+          cardSet: chosen.set,
+          cardNum: chosen.number || chosen.num
+        });
+      }
     }
   }
   
@@ -12852,11 +12926,20 @@ const ABILITY_HANDLERS = {
       if (!ownerState.hand) ownerState.hand = [];
       ownerState.hand.push(drawnCard);
       
-
+      
       if (globalThis.updateDeckBubbles) globalThis.updateDeckBubbles();
       if (globalThis.renderAllHands) globalThis.renderAllHands();
       
       showPopup('Legendary Pulse: Drew 1 card.');
+      if (globalThis.logEvent) {
+        const owner = pk === 'p1' ? 'player1' : 'player2';
+        globalThis.logEvent({
+          player: owner,
+          text: `Drew ${drawnCard.name} (Legendary Pulse)`,
+          cardSet: drawnCard.set,
+          cardNum: drawnCard.number || drawnCard.num
+        });
+      }
     } else {
       showPopup('Legendary Pulse: No cards in deck.');
     }

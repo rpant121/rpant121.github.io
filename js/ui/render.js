@@ -37,6 +37,24 @@ export function updateDeckBubbles() {
   updateDeckStack('player2');
 }
 
+export function updateHandBubbles() {
+  const p1HandBubble = document.getElementById('p1HandBubble');
+  const p2HandBubble = document.getElementById('p2HandBubble');
+  if (p1HandBubble) p1HandBubble.textContent = globalThis.playerState?.player1?.hand?.length || 0;
+  if (p2HandBubble) p2HandBubble.textContent = globalThis.playerState?.player2?.hand?.length || 0;
+}
+
+export function updateDiscardBubbles() {
+  const p1DiscardBubble = document.getElementById('p1DiscardBubble');
+  const p2DiscardBubble = document.getElementById('p2DiscardBubble');
+  const p1Discard = globalThis.playerState?.player1?.discard || {};
+  const p2Discard = globalThis.playerState?.player2?.discard || {};
+  const p1Count = (p1Discard.cards?.length || 0) + (Object.values(p1Discard.energyCounts || {}).reduce((a, b) => a + b, 0));
+  const p2Count = (p2Discard.cards?.length || 0) + (Object.values(p2Discard.energyCounts || {}).reduce((a, b) => a + b, 0));
+  if (p1DiscardBubble) p1DiscardBubble.textContent = p1Count;
+  if (p2DiscardBubble) p2DiscardBubble.textContent = p2Count;
+}
+
 export function updatePointsUI() {
   const f = (id, pts) => {
     document.querySelectorAll(`#${id} .point-bubble`).forEach(b => {
@@ -190,6 +208,7 @@ export function renderAllHands() {
   renderHand(p2HandDiv, playerState.player2?.hand || [], p2Hide);
   if (p1HandDiv) p1HandDiv.classList.toggle('disable-clicks', currentPlayer === 'player2');
   if (p2HandDiv) p2HandDiv.classList.toggle('disable-clicks', currentPlayer === 'player1');
+  updateHandBubbles();
 }
 
 export function renderDiscard(owner) {
@@ -233,6 +252,7 @@ export function renderDiscard(owner) {
     row.appendChild(im);
     drawer.appendChild(row);
   });
+  updateDiscardBubbles();
 }
 
 export function renderEnergyZone() {

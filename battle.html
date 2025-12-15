@@ -407,7 +407,7 @@ h1{
   outline-offset:3px;
   border-radius:5px;
 }
-.deck-bubble{
+.deck-bubble, .hand-bubble, .discard-bubble{
   position:absolute;
   width:32px;
   height:32px;
@@ -426,17 +426,47 @@ h1{
   z-index: 100;
 }
 
-.deck-bubble:hover {
+.deck-bubble:hover, .hand-bubble:hover, .discard-bubble:hover {
   transform: scale(1.15);
   box-shadow: 0 4px 12px rgba(0, 212, 255, 0.5), 0 0 20px rgba(0, 212, 255, 0.3);
   border-color: rgba(0, 212, 255, 0.6) !important;
   background: rgba(40, 40, 50, 1) !important;
 }
+
 #p1Bubble{
-  left:-40px;top:50%;transform:translateY(-50%);
+  right: 70px;
+  bottom: 20px;
+  transform: none;
 }
+
 #p2Bubble{
-  right:-40px;top:50%;transform:translateY(-50%);
+  left: 70px;
+  top: 20px;
+  transform: none;
+}
+
+#p1HandBubble{
+  right: 10px;
+  bottom: 60px;
+  transform: none;
+}
+
+#p2HandBubble{
+  left: 10px;
+  top: 80px;
+  transform: none;
+}
+
+#p1DiscardBubble{
+  left: 20px;
+  bottom: 20px;
+  transform: translateY(0);
+}
+
+#p2DiscardBubble{
+  left: 20px;
+  top: calc(50% + 60px);
+  transform: translateY(0);
 }
 
 .deck-stack {
@@ -4513,7 +4543,7 @@ div[style*="retreat"]{
 <script type="module">
 import { ENERGY_ICONS, STATUS_TYPES, ABILITY_BADGE, STATUS_ICON_URLS } from './js/core/constants.js';
 import { pkToPlayer, oppPk, parseInt10, normStr, parseCSV, csvIdFor, getAbilityCardKey, abilityRequiresActive } from './js/core/utils.js';
-import { energyIconUrl, updateDeckStack, updateDeckBubbles, updatePointsUI, updateTurnBox, setHpOnImage, renderHand, renderAllHands, renderDiscard, renderEnergyZone } from './js/ui/render.js';
+import { energyIconUrl, updateDeckStack, updateDeckBubbles, updateHandBubbles, updateDiscardBubbles, updatePointsUI, updateTurnBox, setHpOnImage, renderHand, renderAllHands, renderDiscard, renderEnergyZone } from './js/ui/render.js';
 import { showPopup, closeAttackMenu, openToolModal, countPipsOn, getToolDataFromSlot, extractAbilities } from './js/ui/modals.js';
 import { canAttack, isActiveBlockedFromAttacking, getFightingCoachBoost, getThickFatReduction, applyGuardedGrill, shouldBlockDamageFromEx, getCounterattackDamage, applyTypesToAttackMenu } from './js/game/attacks.js';
 import { applyAbilityEffect, populateAbilityCache, hasArceusInPlay, getAbilityRow, getPassiveDamageReduction, checkPassiveAbility, hasCrystalBody, hasLevitateZeroRetreat, getPassiveAbility } from './js/game/abilities.js';
@@ -4534,6 +4564,8 @@ globalThis.abilityRequiresActive = abilityRequiresActive;
 globalThis.energyIconUrl = energyIconUrl;
 globalThis.updateDeckStack = updateDeckStack;
 globalThis.updateDeckBubbles = updateDeckBubbles;
+globalThis.updateHandBubbles = updateHandBubbles;
+globalThis.updateDiscardBubbles = updateDiscardBubbles;
 globalThis.updatePointsUI = updatePointsUI;
 globalThis.updateTurnBox = updateTurnBox;
 globalThis.setHpOnImage = setHpOnImage;
@@ -4585,6 +4617,8 @@ globalThis.addTrainerToDiscard = addTrainerToDiscard;
     <div class="player-area" id="player2">
       <div id="p2Bubble" class="deck-bubble">0</div>
       <div id="p2DeckStack" class="deck-stack"></div>
+      <div id="p2HandBubble" class="hand-bubble">0</div>
+      <div id="p2DiscardBubble" class="discard-bubble">0</div>
       <div class="points-indicator" id="p2Points">
         <div class="point-bubble" data-i="1"></div>
         <div class="point-bubble" data-i="2"></div>
@@ -4605,6 +4639,8 @@ globalThis.addTrainerToDiscard = addTrainerToDiscard;
     <div class="player-area" id="player1">
       <div id="p1Bubble" class="deck-bubble">0</div>
       <div id="p1DeckStack" class="deck-stack"></div>
+      <div id="p1HandBubble" class="hand-bubble">0</div>
+      <div id="p1DiscardBubble" class="discard-bubble">0</div>
       <div class="points-indicator" id="p1Points">
         <div class="point-bubble" data-i="1"></div>
         <div class="point-bubble" data-i="2"></div>
@@ -5104,6 +5140,7 @@ function highImgUrl(set,num){
 }
 
 function logEvent({ player, text, cardSet = null, cardNum = null }) {
+  globalThis.logEvent = logEvent;
   const id = logCounter++;
   const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -5127,11 +5164,17 @@ function logEvent({ player, text, cardSet = null, cardNum = null }) {
     ${imgUrl ? `<img class="log-thumb" src="${imgUrl}" alt="card">` : '' }
   `;
 
+  if (logEntriesDiv.firstChild) {
+    logEntriesDiv.insertBefore(div, logEntriesDiv.firstChild);
+  } else {
   logEntriesDiv.appendChild(div);
-  logEntriesDiv.scrollTop = logEntriesDiv.scrollHeight;
+  }
+  logEntriesDiv.scrollTop = 0;
   
   fullHistoryLog.push({ id, ts, player: who, text, cardSet, cardNum, imgUrl });
 }
+
+globalThis.logEvent = logEvent;
 
 logEntriesDiv.addEventListener("click", async (e) => {
   const thumb = e.target.closest(".log-thumb");
@@ -7631,8 +7674,26 @@ async function handleAttackClick(attack, meta, ownerKey, activeDiv) {
     const result = await damageActiveOf(foe, damage, { attackerImg: attackerImg });
     knocked = result.knocked;
     showPopup(`${meta.name} used ${attack.name}${damage > 0 ? ` for ${damage} damage!` : '!'}`);
+    if (typeof logEvent === 'function') {
+      const owner = pk === 'p1' ? 'player1' : 'player2';
+      logEvent({
+        player: owner,
+        text: `${meta.name} used ${attack.name}${damage > 0 ? ` for ${damage} damage` : ''}`,
+        cardSet: attackerImg?.dataset?.set,
+        cardNum: attackerImg?.dataset?.num
+      });
+    }
   } else {
     showPopup(`${meta.name} used ${attack.name}!`);
+    if (typeof logEvent === 'function') {
+      const owner = pk === 'p1' ? 'player1' : 'player2';
+      logEvent({
+        player: owner,
+        text: `${meta.name} used ${attack.name}`,
+        cardSet: attackerImg?.dataset?.set,
+        cardNum: attackerImg?.dataset?.num
+      });
+    }
   }
   
   
@@ -9353,9 +9414,12 @@ if (toolObj) {
   removeFromHand(owner,set,num);
   renderAllHands();
 
+  const evolvedViaRareCandy = target.dataset.evolvedViaRareCandy === 'true';
   logEvent({
     player: owner,
-    text:`Evolved ${meta.evolveFrom || 'a Pokémon'} into ${meta.name}.`,
+    text: evolvedViaRareCandy 
+      ? `Evolved ${meta.evolveFrom || 'a Pokémon'} into ${meta.name} (via Rare Candy).`
+      : `Evolved ${meta.evolveFrom || 'a Pokémon'} into ${meta.name}.`,
     cardSet:set,cardNum:num
   });
 
@@ -9646,40 +9710,22 @@ function updateAllEnergyVisuals() {
 globalThis.updateAllEnergyVisuals = updateAllEnergyVisuals;
 
 document.body.addEventListener('click', async e => {
-  console.log('[MAIN-CLICK] Main click handler fired:', {
-    target: e.target,
-    targetTag: e.target.tagName,
-    targetClass: e.target.className,
-    isModal: !!(e.target.closest('#zoomBackdrop') || e.target.closest('.attack-menu') || e.target.closest('#handBackdrop') || e.target.closest('#toolBackdrop')),
-    button: e.button,
-    menuJustClosed: menuJustClosed,
-    timestamp: new Date().toISOString()
-  });
-  
   if (menuJustClosed) {
-    console.log('[MAIN-CLICK] Menu just closed, ignoring click to prevent card removal');
     return;
   }
   
   if (e.target.closest('#zoomBackdrop') || e.target.closest('.attack-menu') || e.target.closest('#handBackdrop') || e.target.closest('#toolBackdrop')) {
-    console.log('[MAIN-CLICK] Click on modal, ignoring');
     return;
   }
   
   const isPlayerArea = e.target.closest('#player1') || e.target.closest('#player2');
   if (isPlayerArea && !e.target.closest('img') && !e.target.closest('.card-slot') && !e.target.closest('button') && !e.target.closest('.energy-zone') && !e.target.closest('.hand')) {
-    console.log('[MAIN-CLICK] Click on empty player area (not on card/button/energy/hand), checking modes:', {
-      isPromotionPhase: isPromotionPhase,
-      isRetreatSelection: isRetreatSelection
-    });
     if (!isPromotionPhase && !isRetreatSelection) {
-      console.log('[MAIN-CLICK] Click on empty player area, ignoring');
       return;
     }
   }
   
   if (e.button !== 0) {
-    console.log('[MAIN-CLICK] Not left click, ignoring');
     return;
   }
 
@@ -9815,26 +9861,9 @@ document.body.addEventListener('click', async e => {
 
   
   const currentSelectedEnergy = selectedEnergy || globalThis.selectedEnergy;
-  console.log('[ENERGY-CHECK] Checking for selected energy:', {
-    selectedEnergy: selectedEnergy,
-    globalSelectedEnergy: globalThis.selectedEnergy,
-    currentSelectedEnergy: currentSelectedEnergy,
-    timestamp: new Date().toISOString()
-  });
   if (currentSelectedEnergy) {
-    console.log('[ENERGY-ATTACH] Energy selected, checking click target:', {
-      target: e.target,
-      targetTag: e.target.tagName,
-      targetClass: e.target.className,
-      selectedEnergy: selectedEnergy,
-      globalSelectedEnergy: globalThis.selectedEnergy,
-      currentSelectedEnergy: currentSelectedEnergy,
-      timestamp: new Date().toISOString()
-    });
-    
     const isEnergyZoneClick = e.target.closest('.energy-zone') || e.target.classList.contains('energy');
     if (isEnergyZoneClick) {
-      console.log('[ENERGY-ATTACH] Clicked on energy zone, ignoring and stopping propagation');
       e.stopPropagation();
       e.preventDefault();
       return;
@@ -9846,15 +9875,7 @@ document.body.addEventListener('click', async e => {
       img = slot.querySelector('img');
     }
     
-    console.log('[ENERGY-ATTACH] Found img:', {
-      img: img,
-      inHand: img?.closest('.hand'),
-      hasImg: !!img,
-      target: e.target
-    });
-    
     if (!img || img.closest('.hand')) {
-      console.log('[ENERGY-ATTACH] No valid img or in hand, canceling selection and stopping propagation');
       e.stopPropagation();
       e.preventDefault();
       cancelSelection();
@@ -9862,13 +9883,8 @@ document.body.addEventListener('click', async e => {
     }
     
     const slot = img.closest('.card-slot');
-    console.log('[ENERGY-ATTACH] Found slot:', {
-      slot: slot,
-      hasSlot: !!slot
-    });
     
     if (!slot) {
-      console.log('[ENERGY-ATTACH] No slot found, canceling selection and stopping propagation');
       e.stopPropagation();
       e.preventDefault();
       cancelSelection();
@@ -9876,26 +9892,14 @@ document.body.addEventListener('click', async e => {
     }
     
     const owner = img.closest('#player1') ? 'player1' : 'player2';
-    console.log('[ENERGY-ATTACH] Owner check:', {
-      owner: owner,
-      currentPlayer: currentPlayer,
-      matches: owner === currentPlayer
-    });
     
     if (owner !== currentPlayer) {
-      console.log('[ENERGY-ATTACH] Wrong owner, showing popup and stopping propagation');
       e.stopPropagation();
       e.preventDefault();
       e.stopImmediatePropagation();
       showPopup('Attach Energy to your own Pokémon.');
       return;
     }
-    
-    console.log('[ENERGY-ATTACH] Attaching energy to slot:', {
-      owner: owner,
-      slot: slot,
-      energy: selectedEnergy
-    });
     
     e.stopPropagation();
     e.preventDefault();
@@ -9904,7 +9908,6 @@ document.body.addEventListener('click', async e => {
     selectedEnergy = null;
     globalThis.selectedEnergy = null;
     clearSelectionGlow();
-    console.log('[ENERGY-ATTACH] Energy attached successfully');
     return;
   }
 
@@ -9963,41 +9966,20 @@ document.body.addEventListener('click', async e => {
   }
   
   if (clickedImg && !clickedImg.closest('.hand')) {
-    console.log('[ACTIVE-CLICK] Clicked on img:', {
-      clickedImg: clickedImg,
-      inHand: clickedImg.closest('.hand'),
-      currentPlayer: currentPlayer,
-      selectedEnergy: selectedEnergy,
-      timestamp: new Date().toISOString()
-    });
-    
     const activeArea = currentPlayer ? activeFor(currentPlayer) : null;
     
     if (activeArea && activeArea.contains(clickedImg)) {
-      console.log('[ACTIVE-CLICK] Clicked on active Pokemon, checking modes:', {
-          isEvoMode,
-          toolAttachPending: !!toolAttachPending,
-          selectedEnergy,
-          isPromotionPhase,
-          isRetreatSelection,
-          abilityJustUsed,
-        hasGlowEvo: clickedImg.classList.contains('glow-evo')
-        });
-
       if (isEvoMode && clickedImg.classList.contains('glow-evo')) {
         return;
       }
 
       const currentSelectedEnergy = selectedEnergy || globalThis.selectedEnergy;
       if (isEvoMode || toolAttachPending || currentSelectedEnergy || isPromotionPhase || isRetreatSelection || abilityJustUsed) {
-        console.log('[ACTIVE-CLICK] Menu blocked by special mode, selectedEnergy:', selectedEnergy, 'globalSelectedEnergy:', globalThis.selectedEnergy);
         e.stopPropagation();
         e.preventDefault();
         e.stopImmediatePropagation();
         return;
       }
-      
-      console.log('[ACTIVE-CLICK] Opening attack menu');
 
       const set = clickedImg.dataset.set;
       const num = clickedImg.dataset.num;
@@ -10122,6 +10104,209 @@ if (meta && String(meta.category || '').toLowerCase() === 'trainer') {
   const cardId = csvIdFor(set, num);
   const effect = TRAINER_EFFECT_DATA.find(x => x.id === cardId);
   
+  async function validateTrainerEffect(effect, owner) {
+    if (!effect || !effect.effect_type) return { valid: true };
+    
+    const pk = owner === 'player1' ? 'p1' : 'p2';
+    const effectType = effect.effect_type;
+    const param1 = effect.param1 || '';
+    const param2 = effect.param2 || '';
+    
+    if (effectType === 'heal') {
+      const activeImg = globalThis.getActiveImg?.(pk);
+      if (!activeImg) return { valid: false, message: 'No Active Pokémon to heal.' };
+      
+      const slot = activeImg.closest('.card-slot');
+      const modifiedMaxHp = slot?.dataset.maxHp ? parseInt(slot.dataset.maxHp, 10) : null;
+      const maxHp = modifiedMaxHp || parseInt(activeImg.dataset.hp || '0', 10);
+      const curHp = parseInt(activeImg.dataset.chp || maxHp, 10);
+      
+      if (curHp >= maxHp) {
+        return { valid: false, message: 'Your Active Pokémon is already at full health.' };
+      }
+    }
+    
+    if (effectType === 'heal_type') {
+      const type = (param2 || 'grass').toLowerCase();
+      const allImgs = globalThis.getAllPokemonImgs?.(pk) || [];
+      let hasValidTarget = false;
+      
+      for (const img of allImgs) {
+        try {
+          const imgMeta = await fetchCardMeta(img.dataset.set, img.dataset.num);
+          if (imgMeta.types?.some(t => t.toLowerCase() === type)) {
+            const slot = img.closest('.card-slot');
+            const modifiedMaxHp = slot?.dataset.maxHp ? parseInt(slot.dataset.maxHp, 10) : null;
+            const maxHp = modifiedMaxHp || parseInt(img.dataset.hp || '0', 10);
+            const curHp = parseInt(img.dataset.chp || maxHp, 10);
+            
+            if (curHp < maxHp) {
+              hasValidTarget = true;
+              break;
+            }
+          }
+        } catch {}
+      }
+      
+      if (!hasValidTarget) {
+        return { valid: false, message: `No damaged ${type}-type Pokémon to heal.` };
+      }
+    }
+    
+    if (effectType === 'heal_all_with_type_energy') {
+      const energyType = (param2 || 'water').toLowerCase();
+      const allImgs = globalThis.getAllPokemonImgs?.(pk) || [];
+      let hasValidTarget = false;
+      
+      for (const img of allImgs) {
+        const slot = img.closest('.card-slot');
+        const energyBox = slot?.querySelector('.energy-pips');
+        const pips = Array.from(energyBox?.querySelectorAll('.energy-pip:not(.phantom-pip)') ?? []);
+        const hasType = pips.some(pip => (pip.dataset.type || '').toLowerCase() === energyType);
+        
+        if (hasType) {
+          const modifiedMaxHp = slot?.dataset.maxHp ? parseInt(slot.dataset.maxHp, 10) : null;
+          const maxHp = modifiedMaxHp || parseInt(img.dataset.hp || '0', 10);
+          const curHp = parseInt(img.dataset.chp || maxHp, 10);
+          
+          if (curHp < maxHp) {
+            hasValidTarget = true;
+            break;
+          }
+        }
+      }
+      
+      if (!hasValidTarget) {
+        return { valid: false, message: `No damaged Pokémon with ${energyType} energy to heal.` };
+      }
+    }
+    
+    if (effectType === 'heal_and_cure_status') {
+      const allImgs = globalThis.getAllPokemonImgs?.(pk) || [];
+      let hasValidTarget = false;
+      
+      for (const img of allImgs) {
+        const hasStatus = !!img.dataset.status;
+        const slot = img.closest('.card-slot');
+        const modifiedMaxHp = slot?.dataset.maxHp ? parseInt(slot.dataset.maxHp, 10) : null;
+        const maxHp = modifiedMaxHp || parseInt(img.dataset.hp || '0', 10);
+        const curHp = parseInt(img.dataset.chp || maxHp, 10);
+        const hasDamage = curHp < maxHp;
+        
+        if (hasStatus || hasDamage) {
+          hasValidTarget = true;
+          break;
+        }
+      }
+      
+      if (!hasValidTarget) {
+        return { valid: false, message: 'No Pokémon with damage or status conditions to heal.' };
+      }
+    }
+    
+    if (effectType === 'flip_attach_energy') {
+      const type = (param1 || 'water').toLowerCase();
+      const allImgs = globalThis.getAllPokemonImgs?.(pk) || [];
+      let hasValidTarget = false;
+      
+      for (const img of allImgs) {
+        try {
+          const imgMeta = await fetchCardMeta(img.dataset.set, img.dataset.num);
+          if (imgMeta.types?.some(t => t.toLowerCase() === type)) {
+            hasValidTarget = true;
+            break;
+          }
+        } catch {}
+      }
+      
+      if (!hasValidTarget) {
+        return { valid: false, message: `No ${type}-type Pokémon in play to attach energy to.` };
+      }
+    }
+    
+    if (effectType === 'search_pokemon_type_random') {
+      const requiredType = (param1 || '').toLowerCase().trim();
+      const deck = playerState[owner]?.deck || [];
+      
+      if (deck.length === 0) {
+        return { valid: false, message: 'Deck is empty.' };
+      }
+      
+      let hasValidCard = false;
+      for (const card of deck.slice(0, Math.min(deck.length, 20))) {
+        try {
+          const cardMeta = await fetchCardMeta(card.set, card.number || card.num);
+          if (cardMeta.category === 'Pokemon') {
+            if (requiredType) {
+              if (cardMeta.types?.some(t => t.toLowerCase() === requiredType)) {
+                hasValidCard = true;
+                break;
+              }
+            } else {
+              hasValidCard = true;
+              break;
+            }
+          }
+        } catch {}
+      }
+      
+      if (!hasValidCard) {
+        return { valid: false, message: requiredType ? `No ${requiredType}-type Pokémon in deck.` : 'No Pokémon in deck.' };
+      }
+    }
+    
+    if (effectType === 'search_basic_pokemon') {
+      const deck = playerState[owner]?.deck || [];
+      
+      if (deck.length === 0) {
+        return { valid: false, message: 'Deck is empty.' };
+      }
+      
+      let hasValidCard = false;
+      for (const card of deck.slice(0, Math.min(deck.length, 20))) {
+        try {
+          const cardMeta = await fetchCardMeta(card.set, card.number || card.num);
+          if (cardMeta.category === 'Pokemon' && cardMeta.stage?.toLowerCase() === 'basic') {
+            hasValidCard = true;
+            break;
+          }
+        } catch {}
+      }
+      
+      if (!hasValidCard) {
+        return { valid: false, message: 'No Basic Pokémon in deck.' };
+      }
+    }
+    
+    if (effectType === 'search_named_random') {
+      const name = (param2 || '').toLowerCase().trim();
+      if (!name) return { valid: true };
+      
+      const deck = playerState[owner]?.deck || [];
+      
+      if (deck.length === 0) {
+        return { valid: false, message: 'Deck is empty.' };
+      }
+      
+      let hasValidCard = false;
+      for (const card of deck.slice(0, Math.min(deck.length, 20))) {
+        try {
+          const cardMeta = await fetchCardMeta(card.set, card.number || card.num);
+          if (cardMeta.category === 'Pokemon' && (cardMeta.name || '').toLowerCase().includes(name)) {
+            hasValidCard = true;
+            break;
+          }
+        } catch {}
+      }
+      
+      if (!hasValidCard) {
+        return { valid: false, message: `No ${name} in deck.` };
+      }
+    }
+    
+    return { valid: true };
+  }
+  
   const doEffect = async () => {
     if (effect) {
       await (globalThis.applyTrainerEffect || applyTrainerEffect)(effect, owner, trainerCardImg, true); 
@@ -10153,7 +10338,19 @@ if (meta && String(meta.category || '').toLowerCase() === 'trainer') {
       showPopup(`${meta.name || 'This Supporter'} is not yet implemented.`);
       return;
     }
+
+    const validation = await validateTrainerEffect(effect, owner);
+    if (!validation.valid) {
+      showPopup(validation.message || 'This card would have no effect.');
+      return;
+    }
     
+    logEvent({
+      player: owner,
+      text: `Played Supporter: ${meta.name}.`,
+      cardSet: set,
+      cardNum: num
+    });
     
     try {
       await doEffect();
@@ -10170,13 +10367,6 @@ if (meta && String(meta.category || '').toLowerCase() === 'trainer') {
     globalThis.__supporterPlayedThisTurn[pkForSilvally] = true;
       
     showPopup('Supporter played');
-
-    logEvent({
-      player: owner,
-      text: `Played Supporter: ${meta.name}.`,
-      cardSet: set,
-      cardNum: num
-    });
     } catch (err) {
       
       if (err.message === 'SELECTION_CANCELLED') {
@@ -10191,6 +10381,21 @@ if (meta && String(meta.category || '').toLowerCase() === 'trainer') {
 
     return;
   } else if (ttype === 'item') {
+    
+    if (effect) {
+      const validation = await validateTrainerEffect(effect, owner);
+      if (!validation.valid) {
+        showPopup(validation.message || 'This card would have no effect.');
+        return;
+      }
+    }
+    
+    logEvent({
+      player: owner,
+      text: `Played Item: ${meta.name}.`,
+      cardSet: set,
+      cardNum: num
+    });
     
     try {
       await doEffect();
@@ -10231,13 +10436,6 @@ if (meta && String(meta.category || '').toLowerCase() === 'trainer') {
       removeFromHand(owner, set, num);
       renderAllHands();
       showPopup('Item played');
-
-      logEvent({
-        player: owner,
-        text: `Played Item: ${meta.name}.`,
-        cardSet: set,
-        cardNum: num
-      });
     } catch (err) {
 
       showPopup(err.message || 'Cannot use this Item right now.');
@@ -11503,14 +11701,46 @@ const zoomStatus = document.getElementById("zoomStatus");
 
 document.body.addEventListener('click',async e=>{
   if(!isEvoMode)return;
+  
   const target=e.target.closest('img.glow-evo') || (e.target.classList.contains('glow-evo') ? e.target : null);
-  if(!target)return;
+  
+  if(target){
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    await evolveCard(target,evoMeta,evoHandCard,evoOwner,evoHandCard.dataset.set,evoHandCard.dataset.num);
+    clearGlow();
+    return;
+  }
+  
+  const isClickOnModal = e.target.closest('#zoomBackdrop') || 
+                         e.target.closest('.attack-menu') || 
+                         e.target.closest('#handBackdrop') || 
+                         e.target.closest('#toolBackdrop');
+  
+  if(isClickOnModal)return;
+  
+  const isClickOnHand = e.target.closest('.hand');
+  if(isClickOnHand)return;
+  
+  const isClickOnButton = e.target.tagName === 'BUTTON' || e.target.closest('button');
+  if(isClickOnButton)return;
+  
   e.stopPropagation();
-  e.stopImmediatePropagation();
   e.preventDefault();
-  await evolveCard(target,evoMeta,evoHandCard,evoOwner,evoHandCard.dataset.set,evoHandCard.dataset.num);
   clearGlow();
+  showPopup('Evolution cancelled.');
 }, true);
+
+document.addEventListener('keydown', e => {
+  if(!isEvoMode)return;
+  if(e.key === 'Escape'){
+    e.preventDefault();
+  e.stopPropagation();
+  clearGlow();
+    showPopup('Evolution cancelled.');
+  }
+});
 
 globalThis.abilityCache = {};
 
@@ -12250,7 +12480,11 @@ async function startTurn(player) {
       <div class="turn-icon">${globalThis.turnNumber}</div>
       ${turnLabel}
     `;
+  if (logEntriesDiv.firstChild) {
+    logEntriesDiv.insertBefore(bar, logEntriesDiv.firstChild);
+  } else {
   logEntriesDiv.appendChild(bar);
+  }
 
   
   hasAttachedEnergyThisTurn = false;
@@ -12806,15 +13040,30 @@ globalThis.selectPokemon = function (_st, pk, _z) {
 globalThis.drawCards = async function (_st, pk, n) {
   const owner = pk === 'p1' ? 'player1' : 'player2';
   const drawCount = parseInt(n) || 0;
+  const drawnCards = [];
   
   for (let i = 0; i < drawCount; i++) {
     if (playerState[owner].deck.length) {
       const drawnCard = playerState[owner].deck.shift();
       playerState[owner].hand.push(drawnCard);
+      drawnCards.push(drawnCard);
+    }
+  }
+  
+  if (drawnCards.length > 0 && typeof logEvent === 'function') {
+    for (const card of drawnCards) {
+      logEvent({
+        player: owner,
+        text: `Drew ${card.name}`,
+        cardSet: card.set,
+        cardNum: card.number || card.num
+      });
     }
   }
   
   updateDeckBubbles();
+updateHandBubbles();
+updateDiscardBubbles();
   renderAllHands();
 };
 
