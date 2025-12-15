@@ -303,7 +303,8 @@ Energy: Water</textarea>
 1 Copycat B1 225
 2 Poké Ball P-A 5
 1 X Speed P-A 2
-1 Giant Cape A2 147</textarea>
+1 Giant Cape A2 147
+Energy: Lightning</textarea>
     <div class="energy-wrap">
       <label><strong>Energy Types (max 3)</strong></label>
       <div class="energy-grid" id="energyGrid2"></div>
@@ -488,7 +489,7 @@ document.getElementById('handTester').onclick=()=>{
 // Pre-load Pocket sets on page load for better performance
 window.addEventListener('DOMContentLoaded', async () => {
   // Pre-load sets in background
-  loadPocketSets().catch(err => console.warn('Failed to pre-load Pocket sets:', err));
+  loadPocketSets().catch(() => {});
   
   ['1','2'].forEach(num => {
     const saved = JSON.parse(localStorage.getItem(`player${num}Energy`) || '[]');
