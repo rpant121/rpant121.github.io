@@ -3375,7 +3375,7 @@ const TRAINER_EFFECTS = {
     for (const card of deck) {
       try {
         const meta = await globalThis.fetchCardMeta?.(card.set, card.number || card.num) || 
-                     await fetch(`https://api.tcgdx.net/v2/en/sets/${card.set}/${card.number || card.num}`).then(r => r.json());
+                     await fetch(`https://api.tcgdex.net/v2/en/sets/${card.set}/${card.number || card.num}`).then(r => r.json());
         
         if (meta.category === 'Trainer' && 
             meta.trainerType === 'Supporter' && 
@@ -3764,7 +3764,7 @@ const TRAINER_EFFECTS = {
     for (const card of hand) {
       try {
         const meta = await globalThis.fetchCardMeta?.(card.set, card.number || card.num) || 
-                     await fetch(`https://api.tcgdx.net/v2/en/sets/${card.set}/${card.number || card.num}`).then(r => r.json());
+                     await fetch(`https://api.tcgdex.net/v2/en/sets/${card.set}/${card.number || card.num}`).then(r => r.json());
         if (meta.category === 'Trainer' && meta.trainerType === 'Supporter') {
           supporters.push(card);
         }
@@ -10031,14 +10031,14 @@ const MOVE_HANDLERS = {
         if (!cardName) cardName = meta.name || 'Unknown';
         if (!cardSrc) {
           const padded = String(card.number || card.num).padStart(3, '0');
-          cardSrc = `https://assets.tcgdx.net/en/tcgp/${card.set}/${padded}/high.png`;
+          cardSrc = `https://assets.tcgdex.net/en/tcgp/${card.set}/${padded}/high.png`;
         }
       } catch (e) {
         console.error('[discard_top_opponent_deck] Error fetching meta for discarded card:', e);
         if (!cardName) cardName = 'Unknown';
         if (!cardSrc) {
           const padded = String(card.number || card.num).padStart(3, '0');
-          cardSrc = `https://assets.tcgdx.net/en/tcgp/${card.set}/${padded}/high.png`;
+          cardSrc = `https://assets.tcgdex.net/en/tcgp/${card.set}/${padded}/high.png`;
         }
       }
       
@@ -11103,14 +11103,14 @@ const MOVE_HANDLERS = {
       if (!cardName) cardName = meta.name || 'Unknown';
       if (!cardSrc) {
         const padded = String(removed.number || removed.num).padStart(3, '0');
-        cardSrc = `https://assets.tcgdx.net/en/tcgp/${removed.set}/${padded}/high.png`;
+        cardSrc = `https://assets.tcgdex.net/en/tcgp/${removed.set}/${padded}/high.png`;
       }
     } catch (e) {
       console.error('[reveal_discard_supporter] Error fetching meta for discarded card:', e);
       if (!cardName) cardName = 'Unknown';
       if (!cardSrc) {
         const padded = String(removed.number || removed.num).padStart(3, '0');
-        cardSrc = `https://assets.tcgdx.net/en/tcgp/${removed.set}/${padded}/high.png`;
+        cardSrc = `https://assets.tcgdex.net/en/tcgp/${removed.set}/${padded}/high.png`;
       }
     }
     
@@ -13927,14 +13927,14 @@ const ABILITY_HANDLERS = {
         if (!cardName) cardName = meta.name || 'Unknown';
         if (!cardSrc) {
           const padded = String(card.number || card.num).padStart(3, '0');
-          cardSrc = `https://assets.tcgdx.net/en/tcgp/${card.set}/${padded}/high.png`;
+          cardSrc = `https://assets.tcgdex.net/en/tcgp/${card.set}/${padded}/high.png`;
         }
       } catch (e) {
         console.error('[Slow Sear] Error fetching meta for discarded card:', e);
         if (!cardName) cardName = 'Unknown';
         if (!cardSrc) {
           const padded = String(card.number || card.num).padStart(3, '0');
-          cardSrc = `https://assets.tcgdx.net/en/tcgp/${card.set}/${padded}/high.png`;
+          cardSrc = `https://assets.tcgdex.net/en/tcgp/${card.set}/${padded}/high.png`;
         }
       }
       

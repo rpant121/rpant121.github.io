@@ -5657,7 +5657,7 @@ function setupToolDropHandlers() {
             await attachToolToSlot(pokemonOwner, targetSlot, {
               set: set,
               num: num,
-              src: handCard.image || `https://assets.tcgdx.net/en/tcgp/${set}/${String(num).padStart(3, '0')}/high.png`
+              src: handCard.image || `https://assets.tcgdex.net/en/tcgp/${set}/${String(num).padStart(3, '0')}/high.png`
             });
             
             // Apply tool effect
@@ -6806,8 +6806,8 @@ async function calculatePreviewDamage(attack, attackerImg, meta, pk) {
   }
   
   // Check if this attack uses bonus_damage_per_energy_on_opponent_all (Energy Crush)
-  // or bonus_damage_for_each_bench (Suicune ex - Crystal Waltz)
-  // For these attacks, base damage should be 0
+  // or bonus_damage_for_each_bench (Suicune ex - Crystal Waltz, Altaria - Do the Wave)
+  // For these attacks, base damage should be 0 ONLY if CSV shows 0 base damage
   try {
     if (typeof globalThis.getMoveRow === 'function' && typeof globalThis.loadMoveEffects === 'function') {
       await globalThis.loadMoveEffects();
@@ -6816,7 +6816,11 @@ async function calculatePreviewDamage(attack, attackerImg, meta, pk) {
         damage = 0; // Energy Crush has 0 base damage
         console.log(`[preview] Energy Crush detected, setting base damage to 0`);
       } else if (moveRow?.effect_type === 'bonus_damage_for_each_bench') {
-        damage = 0; // Attacks that only count benched Pokémon have 0 base damage
+        const csvBaseDamage = parseInt(moveRow?.damageBase || moveRow?.damage || '0', 10);
+        if (csvBaseDamage === 0) {
+          damage = 0; // Only set to 0 if CSV shows 0 base damage (Suicune ex case)
+        }
+        // Otherwise, preserve the base damage (Altaria has 20 base, Mega Altaria ex has 40)
       }
     }
   } catch (err) {
@@ -7290,8 +7294,8 @@ async function handleAttackClick(attack, meta, ownerKey, activeDiv) {
   }
   
   // Check if this attack uses bonus_damage_per_energy_on_opponent_all (Energy Crush)
-  // or bonus_damage_for_each_bench (Suicune ex - Crystal Waltz)
-  // For these attacks, base damage should be 0
+  // or bonus_damage_for_each_bench (Suicune ex - Crystal Waltz, Altaria - Do the Wave)
+  // For these attacks, base damage should be 0 ONLY if CSV shows 0 base damage
   try {
     if (typeof globalThis.getMoveRow === 'function' && typeof globalThis.loadMoveEffects === 'function') {
       await globalThis.loadMoveEffects();
@@ -7300,7 +7304,11 @@ async function handleAttackClick(attack, meta, ownerKey, activeDiv) {
         damage = 0; // Energy Crush has 0 base damage
         console.log(`[attack] Energy Crush detected, setting base damage to 0`);
       } else if (moveRow?.effect_type === 'bonus_damage_for_each_bench') {
-        damage = 0; // Attacks that only count benched Pokémon have 0 base damage
+        const csvBaseDamage = parseInt(moveRow?.damageBase || moveRow?.damage || '0', 10);
+        if (csvBaseDamage === 0) {
+          damage = 0; // Only set to 0 if CSV shows 0 base damage (Suicune ex case)
+        }
+        // Otherwise, preserve the base damage (Altaria has 20 base, Mega Altaria ex has 40)
       }
     }
   } catch (err) {
@@ -10062,6 +10070,42 @@ document.body.addEventListener('click', async e => {
     selectedEnergy = null;
     clearSelectionGlow();
     return;
+  }
+
+  /* ========================================
+     Left-click on Bench Pokémon - Open Zoom Panel
+  ======================================== */
+  
+  // Check if clicking on a bench Pokémon (not in hand, not active)
+  const benchImg = e.target.closest('.bench img');
+  if (benchImg && !benchImg.closest('.hand')) {
+    // Only proceed if not in a special selection mode
+    if (!isPromotionPhase && !isRetreatSelection && !globalThis.isSelectingPokemon && !toolAttachPending && !selectedEnergy) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      zoomImg.src = benchImg.src;
+      zoomBackdrop.classList.add('show');
+      
+      try {
+        const set = benchImg.dataset.set;
+        const num = benchImg.dataset.num;
+        const meta = await fetchCardMeta(set, num);
+        await buildZoomPanel(meta, benchImg);
+      } catch {
+        zoomTitle.textContent = 'Pokémon';
+        zoomHp.textContent = '';
+        zoomAttacks.innerHTML = '<div style="color:#cbd5e1">No data</div>';
+        zoomEnergyCount.textContent = 'x0';
+        zoomEnergyIcons.innerHTML = '';
+        zoomWeakness.textContent = '—';
+        zoomRetreat.innerHTML = '';
+        zoomTools.innerHTML = '<div class="chip">none</div>';
+        zoomAbilities.style.display = 'none';
+      }
+      
+      return;
+    }
   }
 
   /* ========================================
