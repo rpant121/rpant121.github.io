@@ -323,11 +323,56 @@ Energy: Lightning</textarea>
 
   <div style="text-align: center; margin: 1rem 0;">
   <button id="startBattle">Start Battle</button>
+  <button id="playOnline" style="margin-left: 1rem;">Play Online</button>
   <button id="handTester" style="margin-left: 1rem;">Opening Hand Tester</button>
 </div>
 
+<!-- Auth Modal -->
+<div id="authModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
+  <div style="background: #2a2f36; padding: 2rem; border-radius: 12px; max-width: 400px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+    <h2 style="margin-top: 0; text-align: center; color: #facc15;">Sign In / Sign Up</h2>
+    <div id="authError" style="color: #f87171; margin: 0.5rem 0; min-height: 1.5rem; text-align: center;"></div>
+    <div id="authMode" style="margin-bottom: 1rem;">
+      <button id="switchToSignIn" style="margin-right: 0.5rem; padding: 0.5rem 1rem; background: #3f444b; border: none; color: #e5e7eb; border-radius: 6px; cursor: pointer;">Sign In</button>
+      <button id="switchToSignUp" style="padding: 0.5rem 1rem; background: #3f444b; border: none; color: #e5e7eb; border-radius: 6px; cursor: pointer;">Sign Up</button>
+    </div>
+    <form id="authForm" style="display: flex; flex-direction: column; gap: 1rem;">
+      <div id="displayNameGroup" style="display: none;">
+        <label style="color: #e5e7eb; margin-bottom: 0.25rem; display: block;">Display Name</label>
+        <input type="text" id="displayName" style="width: 100%; padding: 0.5rem; background: #1e2227; border: 1px solid #3f444b; border-radius: 6px; color: #e5e7eb;" placeholder="Your display name">
+      </div>
+      <div>
+        <label style="color: #e5e7eb; margin-bottom: 0.25rem; display: block;">Email</label>
+        <input type="email" id="authEmail" required style="width: 100%; padding: 0.5rem; background: #1e2227; border: 1px solid #3f444b; border-radius: 6px; color: #e5e7eb;" placeholder="your@email.com">
+      </div>
+      <div>
+        <label style="color: #e5e7eb; margin-bottom: 0.25rem; display: block;">Password</label>
+        <input type="password" id="authPassword" required style="width: 100%; padding: 0.5rem; background: #1e2227; border: 1px solid #3f444b; border-radius: 6px; color: #e5e7eb;" placeholder="Password">
+      </div>
+      <button type="submit" id="authSubmit" style="padding: 0.75rem; background: linear-gradient(135deg, #e3350d, #0074d9); border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer;">Sign In</button>
+      <button type="button" id="signInAnonymously" style="padding: 0.75rem; background: #3f444b; border: none; color: #e5e7eb; border-radius: 8px; cursor: pointer; margin-top: 0.5rem;">Play as Guest</button>
+      <button type="button" id="closeAuthModal" style="padding: 0.5rem; background: transparent; border: 1px solid #3f444b; color: #e5e7eb; border-radius: 6px; cursor: pointer; margin-top: 0.5rem;">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<!-- User Info Display -->
+<div id="userInfo" style="position: fixed; top: 1rem; right: 1rem; background: #2a2f36; padding: 0.75rem 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; z-index: 1000;">
+  <div style="color: #e5e7eb; font-size: 0.9rem;">
+    <div id="userDisplayName" style="font-weight: 600; color: #facc15;"></div>
+    <button id="signOutBtn" style="margin-top: 0.5rem; padding: 0.25rem 0.75rem; background: #3f444b; border: none; color: #e5e7eb; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">Sign Out</button>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+
 <script type="module">
 import { parseDecklist, fetchCardData, loadPocketSets } from './deckparser.js';
+import { initAuth, signUp, signIn, signInAnonymously, signOut, onAuthStateChanged, getCurrentUser } from './js/auth/auth.js';
 
 /* --- Energy pips --- */
 const ENERGY_ICONS={
@@ -486,8 +531,117 @@ document.getElementById('handTester').onclick=()=>{
   window.location.href='hand-tester.html';
 };
 
+// Auth UI Management
+let isSignUpMode = false;
+const authModal = document.getElementById('authModal');
+const authForm = document.getElementById('authForm');
+const authError = document.getElementById('authError');
+const displayNameGroup = document.getElementById('displayNameGroup');
+const authSubmit = document.getElementById('authSubmit');
+const userInfo = document.getElementById('userInfo');
+const userDisplayName = document.getElementById('userDisplayName');
+
+function showAuthModal() {
+  authModal.style.display = 'flex';
+  authError.textContent = '';
+  isSignUpMode = false;
+  updateAuthUI();
+}
+
+function hideAuthModal() {
+  authModal.style.display = 'none';
+  authError.textContent = '';
+  authForm.reset();
+}
+
+function updateAuthUI() {
+  displayNameGroup.style.display = isSignUpMode ? 'block' : 'none';
+  authSubmit.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
+  document.getElementById('switchToSignIn').style.background = isSignUpMode ? '#3f444b' : '#0074d9';
+  document.getElementById('switchToSignUp').style.background = isSignUpMode ? '#0074d9' : '#3f444b';
+}
+
+document.getElementById('switchToSignIn').onclick = () => {
+  isSignUpMode = false;
+  updateAuthUI();
+  authError.textContent = '';
+};
+
+document.getElementById('switchToSignUp').onclick = () => {
+  isSignUpMode = true;
+  updateAuthUI();
+  authError.textContent = '';
+};
+
+document.getElementById('closeAuthModal').onclick = hideAuthModal;
+authModal.onclick = (e) => {
+  if (e.target === authModal) hideAuthModal();
+};
+
+authForm.onsubmit = async (e) => {
+  e.preventDefault();
+  authError.textContent = '';
+  
+  const email = document.getElementById('authEmail').value;
+  const password = document.getElementById('authPassword').value;
+  const displayName = document.getElementById('displayName').value;
+  
+  try {
+    if (isSignUpMode) {
+      await signUp(email, password, displayName || null);
+    } else {
+      await signIn(email, password);
+    }
+    hideAuthModal();
+  } catch (error) {
+    authError.textContent = error.message || 'Authentication failed. Please try again.';
+  }
+};
+
+document.getElementById('signInAnonymously').onclick = async () => {
+  authError.textContent = '';
+  try {
+    await signInAnonymously();
+    hideAuthModal();
+  } catch (error) {
+    authError.textContent = error.message || 'Failed to sign in as guest.';
+  }
+};
+
+document.getElementById('signOutBtn').onclick = async () => {
+  try {
+    await signOut();
+  } catch (error) {
+    console.error('Sign out error:', error);
+  }
+};
+
+document.getElementById('playOnline').onclick = () => {
+  const user = getCurrentUser();
+  if (!user) {
+    showAuthModal();
+  } else {
+    window.location.href = 'online-battle.html';
+  }
+};
+
+// Initialize auth and listen for state changes
+onAuthStateChanged((user) => {
+  if (user) {
+    userInfo.style.display = 'block';
+    userDisplayName.textContent = user.displayName || user.email || 'Guest';
+    document.getElementById('playOnline').textContent = 'Play Online';
+  } else {
+    userInfo.style.display = 'none';
+    document.getElementById('playOnline').textContent = 'Play Online (Sign In Required)';
+  }
+});
+
 // Pre-load Pocket sets on page load for better performance
 window.addEventListener('DOMContentLoaded', async () => {
+  // Initialize auth
+  initAuth();
+  
   // Pre-load sets in background
   loadPocketSets().catch(() => {});
   

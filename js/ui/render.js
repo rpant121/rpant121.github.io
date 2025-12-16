@@ -126,9 +126,17 @@ export function renderHand(div, cards, hide = false, addFadeIn = false) {
   }).join('');
   
   const currentPlayer = globalThis.currentPlayer || '';
-  const isSetupPhase = globalThis.isSetupPhase || false;
+  const isSetupPhase = globalThis.isSetupPhase !== undefined ? globalThis.isSetupPhase : true;
   
-  if ((owner === currentPlayer || isSetupPhase) && !hide) {
+  // Check if we're in local mode during setup
+  const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+  const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+  const isOnline = matchId && (typeof window !== 'undefined' && window.firebaseDatabase);
+  const isLocalSetup = !isOnline && isSetupPhase;
+  
+  // In local mode during setup, both players' cards should be interactive
+  // Otherwise, only currentPlayer's cards are interactive
+  if ((owner === currentPlayer || isLocalSetup) && !hide) {
     const handCards = div.querySelectorAll('.card-img');
     handCards.forEach(img => {
       const newImg = img.cloneNode(true);
@@ -202,12 +210,55 @@ export function renderAllHands() {
   const p2HandDiv = globalThis.p2HandDiv || document.getElementById('p2Hand');
   const playerState = globalThis.playerState || {};
   
-  const p1Hide = currentPlayer === 'player2';
-  const p2Hide = currentPlayer === 'player1';
+  // Check if we're in online mode
+  const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+  const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+  const isOnline = matchId && (typeof window !== 'undefined' && window.firebaseDatabase);
+  const isSetupPhase = globalThis.isSetupPhase !== undefined ? globalThis.isSetupPhase : true;
+  
+  // In local mode during setup, show both hands face up
+  // In online mode, always hide opponent's hand
+  let p1Hide, p2Hide;
+  if (isOnline) {
+    // Online mode: hide opponent's hand
+    p1Hide = currentPlayer === 'player2';
+    p2Hide = currentPlayer === 'player1';
+  } else {
+    // Local mode: during setup, show both hands face up
+    if (isSetupPhase) {
+      p1Hide = false;
+      p2Hide = false;
+    } else {
+      // After setup, hide opponent's hand
+      p1Hide = currentPlayer === 'player2';
+      p2Hide = currentPlayer === 'player1';
+    }
+  }
+  
   renderHand(p1HandDiv, playerState.player1?.hand || [], p1Hide);
   renderHand(p2HandDiv, playerState.player2?.hand || [], p2Hide);
-  if (p1HandDiv) p1HandDiv.classList.toggle('disable-clicks', currentPlayer === 'player2');
-  if (p2HandDiv) p2HandDiv.classList.toggle('disable-clicks', currentPlayer === 'player1');
+  
+  // In local mode during setup, both hands should be clickable
+  // In online mode or after setup, disable clicks on opponent's hand
+  let p1DisableClicks, p2DisableClicks;
+  if (isOnline) {
+    // Online mode: disable clicks on opponent's hand
+    p1DisableClicks = currentPlayer === 'player2';
+    p2DisableClicks = currentPlayer === 'player1';
+  } else {
+    // Local mode: during setup, both hands are clickable
+    if (isSetupPhase) {
+      p1DisableClicks = false;
+      p2DisableClicks = false;
+    } else {
+      // After setup, disable clicks on opponent's hand
+      p1DisableClicks = currentPlayer === 'player2';
+      p2DisableClicks = currentPlayer === 'player1';
+    }
+  }
+  
+  if (p1HandDiv) p1HandDiv.classList.toggle('disable-clicks', p1DisableClicks);
+  if (p2HandDiv) p2HandDiv.classList.toggle('disable-clicks', p2DisableClicks);
   updateHandBubbles();
 }
 

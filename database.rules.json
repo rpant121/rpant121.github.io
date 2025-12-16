@@ -1,0 +1,49 @@
+{
+  "rules": {
+    "users": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "$userId === auth.uid",
+        "profile": {
+          ".read": true
+        },
+        "activeMatch": {
+          ".read": "$userId === auth.uid",
+          ".write": "$userId === auth.uid"
+        }
+      }
+    },
+    "rooms": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["roomCode"],
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (data.child('player1Id').val() === auth.uid || data.child('player2Id').val() === auth.uid || !data.exists() || newData.child('player2Id').val() === auth.uid)"
+      }
+    },
+    "matches": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$matchId": {
+        ".read": "auth != null && (!data.exists() || data.child('player1Id').val() === auth.uid || data.child('player2Id').val() === auth.uid)",
+        ".write": "auth != null && (newData.child('player1Id').val() === auth.uid || newData.child('player2Id').val() === auth.uid)"
+      }
+    },
+    "matchmaking": {
+      "queue": {
+        "$userId": {
+          ".read": "$userId === auth.uid",
+          ".write": "$userId === auth.uid"
+        }
+      }
+    },
+    "presence": {
+      "$userId": {
+        ".read": true,
+        ".write": "$userId === auth.uid"
+      }
+    }
+  }
+}
+
