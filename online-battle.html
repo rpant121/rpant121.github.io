@@ -14357,16 +14357,21 @@ async function initializeGame(matchId) {
             ? (gameState.firstPlayer === 'player1' ? 'player1' : 'player2')
             : (gameState.firstPlayer === 'player1' ? 'player2' : 'player1');
           
-          firstPlayer = uiFirstPlayer;
-          globalThis.firstPlayer = uiFirstPlayer;
-          
-          // Set currentPlayer to firstPlayer (will be used when game starts)
-          if (!currentPlayer) {
-            currentPlayer = uiFirstPlayer;
-          }
-          
-          // Update coin display and button if coin hasn't been flipped locally yet
-          if (mainButton?.textContent === 'Flip Coin') {
+          // Only update if firstPlayer changed or hasn't been set yet
+          if (!firstPlayer || firstPlayer !== uiFirstPlayer) {
+            firstPlayer = uiFirstPlayer;
+            globalThis.firstPlayer = uiFirstPlayer;
+            
+            // Set currentPlayer to firstPlayer (will be used when game starts)
+            if (!currentPlayer) {
+              currentPlayer = uiFirstPlayer;
+            }
+            
+            // Ensure isSetupPhase is set for player2 when they receive coin flip result
+            isSetupPhase = true;
+            globalThis.isSetupPhase = true;
+            
+            // Update coin display whenever firstPlayer is received
             const front = coinEl?.querySelector('.front');
             const back = coinEl?.querySelector('.back');
             
@@ -14379,18 +14384,22 @@ async function initializeGame(matchId) {
                 back.style.transform = 'rotateY(0deg)';
               }
               coinResult.textContent = `${uiFirstPlayer === 'player1' ? 'Player 1' : 'Player 2'} goes first!`;
+              showPopup(`${uiFirstPlayer === 'player1' ? 'Player 1' : 'Player 2'} goes first!`);
             }
             
-            // Check if hands are already present (drawn automatically by player1)
-            const p1HasHand = playerState.player1.hand && playerState.player1.hand.length > 0;
-            const p2HasHand = playerState.player2.hand && playerState.player2.hand.length > 0;
-            if (p1HasHand && p2HasHand) {
-              // Hands already drawn, go directly to Start Game
-              mainButton.textContent = 'Start Game';
-              showPopup('Choose Active & Benched Pokémon');
-            } else {
-              // Hands not yet received, wait for them
-              mainButton.textContent = 'Waiting for hands...';
+            // Update button state if it's still waiting for coin flip
+            if (mainButton && (mainButton.textContent === 'Flip Coin' || mainButton.textContent === 'Waiting for opponent to flip coin...')) {
+              // Check if hands are already present (drawn automatically by player1)
+              const p1HasHand = playerState.player1.hand && playerState.player1.hand.length > 0;
+              const p2HasHand = playerState.player2.hand && playerState.player2.hand.length > 0;
+              if (p1HasHand && p2HasHand) {
+                // Hands already drawn, go directly to Start Game
+                mainButton.textContent = 'Start Game';
+                showPopup('Choose Active & Benched Pokémon');
+              } else {
+                // Hands not yet received, wait for them
+                mainButton.textContent = 'Waiting for hands...';
+              }
             }
           }
         }
@@ -14400,7 +14409,11 @@ async function initializeGame(matchId) {
         const p2HasHand = playerState.player2.hand && playerState.player2.hand.length > 0;
         if (p1HasHand && p2HasHand && !handsDrawn) {
           handsDrawn = true;
-          if (mainButton && (mainButton.textContent === 'Draw Hands' || mainButton.textContent === 'Waiting for hands...')) {
+          // Ensure isSetupPhase is set when hands are received
+          isSetupPhase = true;
+          globalThis.isSetupPhase = true;
+          
+          if (mainButton && (mainButton.textContent === 'Draw Hands' || mainButton.textContent === 'Waiting for hands...' || mainButton.textContent === 'Waiting for opponent to flip coin...')) {
             mainButton.textContent = 'Start Game';
             showPopup('Choose Active & Benched Pokémon');
           }

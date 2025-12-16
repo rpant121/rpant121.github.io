@@ -4665,7 +4665,7 @@ globalThis.addTrainerToDiscard = addTrainerToDiscard;
       <img class="back" crossorigin="anonymous" src="imgs/Coin_Back_TM.png" alt="Coin back">
     </div>
     <div id="coinResult"></div>
-    <button id="mainButton">Draw Hands</button>
+    <button id="mainButton">Flip Coin</button>
     <div class="turnbox">
       <div>Turn</div>
       <div id="turnNum" class="big">1</div>
@@ -5049,6 +5049,7 @@ Object.defineProperty(globalThis, 'currentPlayer', {
   set: (val) => { currentPlayer = val; }
 });
 let hasAttachedEnergyThisTurn=false,selectedEnergy=null,isSetupPhase=true,selectedEnergyElement=null,selectedToolElement=null;
+globalThis.isSetupPhase = true;
 globalThis.setSelectedEnergy = (val) => { selectedEnergy = val; };
 let isEvoMode=false,evoMeta=null,evoOwner=null,evoHandCard=null;
 let isPromotionPhase=false,openAttackMenu=null,gameOver=false,hasRetreatedThisTurn=false,isRetreatSelection=false,lastRetreatTime=0,abilityJustUsed=false,menuJustClosed=false;
@@ -10039,7 +10040,14 @@ const set = e.target.dataset.set;
 const num = e.target.dataset.num;
 const trainerCardImg = e.target; 
 
-if (currentPlayer && owner !== currentPlayer && !globalThis.__silverSelectionActive) return;
+// During setup phase in local mode, allow clicks on both players' cards
+const isSetupPhase = globalThis.isSetupPhase !== undefined ? globalThis.isSetupPhase : true;
+const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+const isOnline = matchId && (typeof window !== 'undefined' && window.firebaseDatabase);
+const isLocalSetup = !isOnline && isSetupPhase;
+
+if (currentPlayer && owner !== currentPlayer && !globalThis.__silverSelectionActive && !isLocalSetup) return;
 
 if (globalThis.__silverSelectionActive && owner !== currentPlayer) {
   
@@ -12388,8 +12396,6 @@ async function startTurn(player) {
       console.error('[startTurn] End of turn abilities failed:', err);
     }
   }
-  
-  globalThis.turnNumber++;
 
   logEvent({
     player,
@@ -12441,6 +12447,15 @@ async function startTurn(player) {
   
   if (globalThis.state.koLastTurn[pk]) {
     globalThis.state.koLastTurn[pk] = false;
+  }
+
+  // Only increment turn number if there was a previous player AND it's not the first turn
+  // The first turn should be 1, so only increment if turnNumber is already > 0 and there was a previous player
+  if (previousPlayer && globalThis.turnNumber > 0) {
+    globalThis.turnNumber++;
+  } else if (!previousPlayer) {
+    // First turn - ensure it's set to 1
+    globalThis.turnNumber = 1;
   }
 
   currentPlayer = player;
@@ -12652,15 +12667,8 @@ async function drawStartingHandForPlayer(key){
     
     
     setTimeout(() => {
-      
-      const hide = key === 'player1' ? currentPlayer === 'player2' : currentPlayer === 'player1';
-      renderHand(handDiv, hand, hide, false);
-      
-      if (key === 'player1') {
-        renderHand(p2HandDiv, playerState.player2.hand, currentPlayer === 'player1');
-      } else {
-        renderHand(p1HandDiv, playerState.player1.hand, currentPlayer === 'player2');
-      }
+      // Use renderAllHands to ensure correct visibility logic (local vs online, setup phase)
+      renderAllHands();
       
       
       animatedCards.forEach(animCard => {
@@ -12750,10 +12758,23 @@ function flipCoin(){
     (globalThis.updateDeckStack || updateDeckStack)('player1');
     (globalThis.updateDeckStack || updateDeckStack)('player2');
 
-    drawOne(currentPlayer);
-    renderAllHands();
+    // Automatically draw starting hands after coin flip
+    Promise.all([
+      drawStartingHandForPlayer('player1'),
+      drawStartingHandForPlayer('player2')
+    ]).then(() => {
+      // Ensure isSetupPhase is set on globalThis for render function
+      isSetupPhase = true;
+      globalThis.isSetupPhase = true;
+      renderAllHands();
+      if (mainButton) {
+        mainButton.textContent = 'Start Game';
+      }
+      showPopup('Choose Active & Benched Pokémon');
+    });
 
-    isSetupPhase = false;
+    // Keep isSetupPhase true until "Start Game" is clicked
+    // isSetupPhase will be set to false when game actually starts
   }, 1500);
 }
 
@@ -12910,16 +12931,8 @@ if (mainButton) mainButton.onclick = async () => {
   const label = mainButton.textContent;
 
   try {
-    if (label === 'Draw Hands') {
-      
-      await Promise.all([
-        drawStartingHandForPlayer('player1'),
-        drawStartingHandForPlayer('player2')
-      ]);
-      
-      showPopup('Choose Active & Benched Pokémon');
-
-      mainButton.textContent = 'Start Game';
+    if (label === 'Flip Coin') {
+      flipCoin();
 
     } else if (label === 'Start Game') {
       if (!p1Active.querySelector('img') || !p2Active.querySelector('img')) {
@@ -12927,7 +12940,21 @@ if (mainButton) mainButton.onclick = async () => {
         return;
       }
 
-      flipCoin();
+      // Setup phase is over, game is starting
+      isSetupPhase = false;
+      globalThis.isSetupPhase = false;
+
+      // Reset currentPlayer so startTurn knows it's the first turn
+      currentPlayer = null;
+      globalThis.currentPlayer = null;
+      
+      // Ensure turn number is 1 for the first turn
+      globalThis.turnNumber = 1;
+
+      // Start the first turn for the player who won the coin flip
+      if (firstPlayer) {
+        startTurn(firstPlayer);
+      }
       mainButton.textContent = 'End Turn';
 
     } else {
