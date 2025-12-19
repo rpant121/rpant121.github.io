@@ -56,12 +56,56 @@ export const createRoom = (roomId, hostId, roomCode, player1Deck = null, player1
 export const createMatch = (matchId, player1Id, player2Id, roomId = null, player1Deck = [], player1Energy = [], player2Deck = [], player2Energy = []) => {
   // Expand deck (convert quantity-based to individual cards)
   function expandDeck(raw) {
+    if (!raw || !Array.isArray(raw)) return [];
+    
+    // Check if deck is already expanded (has 20+ cards with quantity 1)
+    const totalCards = raw.reduce((sum, c) => sum + (Number(c.quantity) || 1), 0);
+    const isAlreadyExpanded = raw.length >= 20 && raw.every(c => (Number(c.quantity) || 1) === 1);
+    
+    if (isAlreadyExpanded && totalCards >= 20) {
+      // Deck is already expanded, just ensure all cards have the right structure
+      return raw.map(c => {
+        const cardNum = c.number ?? c.num ?? null;
+        return {
+          ...c,
+          quantity: 1,
+          number: cardNum,
+          num: cardNum
+        };
+      });
+    }
+    
+    // Deck needs to be expanded
     const out = [];
-    (raw || []).forEach(c => {
-      if (!c || !c.name || !c.set || (c.number ?? c.num) == null) return;
+    raw.forEach(c => {
+      if (!c) return;
+      
+      // Handle different card formats
+      const cardNum = c.number ?? c.num ?? null;
+      if (!c.name || !c.set || cardNum == null) {
+        console.warn('Skipping invalid card in expandDeck:', c);
+        return;
+      }
+      
       const n = Number(c.quantity) || 1;
-      for (let i = 0; i < n; i++) out.push({ ...c, quantity: 1 });
+      for (let i = 0; i < n; i++) {
+        out.push({ 
+          ...c, 
+          quantity: 1,
+          number: cardNum,
+          num: cardNum // Ensure both fields are set
+        });
+      }
     });
+    
+    if (out.length < 20) {
+      console.error('Deck expansion resulted in less than 20 cards:', {
+        originalLength: raw.length,
+        expandedLength: out.length,
+        originalCards: raw.map(c => ({ name: c.name, quantity: c.quantity }))
+      });
+    }
+    
     return out;
   }
 
@@ -103,9 +147,11 @@ export const createMatch = (matchId, player1Id, player2Id, roomId = null, player
 };
 
 // Matchmaking Queue Entry Schema
-export const createQueueEntry = (userId, skillLevel = 0) => ({
+export const createQueueEntry = (userId, skillLevel = 0, deck = null, energy = []) => ({
   userId,
   skillLevel,
+  deck,
+  energy,
   joinedAt: (window.firebaseApp || firebase)?.database?.ServerValue?.TIMESTAMP || Date.now(),
   status: 'waiting'
 });

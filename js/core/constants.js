@@ -9,7 +9,7 @@ export const ENERGY_ICONS = Object.freeze({
   fighting: 'https://archives.bulbagarden.net/media/upload/thumb/4/48/Fighting-attack.png/20px-Fighting-attack.png',
   darkness: 'https://archives.bulbagarden.net/media/upload/thumb/a/ab/Darkness-attack.png/20px-Darkness-attack.png',
   metal: 'https://archives.bulbagarden.net/media/upload/thumb/6/64/Metal-attack.png/20px-Metal-attack.png',
-  dragon: 'https://archives.bulbagarden.net/media/upload/thumb/c/c9/Dragon-attack.png/20px-Dragon-attack.png',
+  dragon: 'https://archives.bulbagarden.net/media/upload/thumb/8/8a/Dragon-attack.png/20px-Dragon-attack.png',
   colorless: 'https://archives.bulbagarden.net/media/upload/thumb/1/1d/Colorless-attack.png/30px-Colorless-attack.png'
 });
 

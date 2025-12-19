@@ -219,7 +219,7 @@ function attachEnergy(img, type) {
   }
 }
 
-function removeEnergy(img, type, count) {
+async function removeEnergy(img, type, count) {
   const slot = getSlotFromImg(img);
   if (!slot || count <= 0) return 0;
   
@@ -245,8 +245,12 @@ function removeEnergy(img, type, count) {
   }
   
 
-  if (removed > 0 && globalThis.playerState?.[owner]?.discard) {
-
+  if (removed > 0) {
+    // Update local playerState if it exists
+    if (typeof globalThis.playerState !== 'undefined' && globalThis.playerState[owner]) {
+      if (!globalThis.playerState[owner].discard) {
+        globalThis.playerState[owner].discard = { cards: [], energyCounts: {} };
+      }
     if (!globalThis.playerState[owner].discard.energyCounts) {
       globalThis.playerState[owner].discard.energyCounts = {};
     }
@@ -255,21 +259,58 @@ function removeEnergy(img, type, count) {
       const current = globalThis.playerState[owner].discard.energyCounts[energyType] || 0;
       globalThis.playerState[owner].discard.energyCounts[energyType] = current + amount;
     }
+    }
     
+    // Also update playerState if it exists (for consistency)
+    if (typeof playerState !== 'undefined' && playerState && playerState[owner]) {
+      if (!playerState[owner].discard) {
+        playerState[owner].discard = { cards: [], energyCounts: {} };
+      }
+      if (!playerState[owner].discard.energyCounts) {
+        playerState[owner].discard.energyCounts = {};
+      }
+      
+      for (const [energyType, amount] of Object.entries(energyTypesRemoved)) {
+        const current = playerState[owner].discard.energyCounts[energyType] || 0;
+        playerState[owner].discard.energyCounts[energyType] = current + amount;
+      }
+    }
 
+    // Sync to Firebase if in online mode
+    if (typeof globalThis.updateGameStatePartial === 'function') {
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && window.firebaseDatabase;
+      if (isOnline && globalThis.playerState?.[owner]?.discard) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchPlayer = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchPlayer}/discard`]: globalThis.playerState[owner].discard
+          });
+        } catch (error) {
+          console.error('[removeEnergy] Error syncing energy discard to Firebase:', error);
+        }
+      }
+    }
+
+    // Update discard UI
     if (typeof globalThis.renderDiscard === 'function') {
       const drawer = owner === 'player1' ? 
         (globalThis.p1DiscardDrawer || document.getElementById('p1DiscardDrawer')) :
         (globalThis.p2DiscardDrawer || document.getElementById('p2DiscardDrawer'));
-      if (drawer && drawer.classList.contains('show')) {
+      if (drawer) {
         globalThis.renderDiscard(owner);
       }
     }
     
-  } else if (removed > 0) {
-    console.error(`[removeEnergy] ERROR: Could not access playerState for ${owner}. Removed ${removed} energy but did not add to discard.`);
-    console.error(`[removeEnergy] globalThis.playerState:`, globalThis.playerState);
-    console.error(`[removeEnergy] owner:`, owner);
+    // Update discard bubbles
+    if (typeof globalThis.updateDiscardBubbles === 'function') {
+      globalThis.updateDiscardBubbles();
+    }
   }
   
   return removed;
@@ -424,6 +465,29 @@ let isSelectionActive = false;
 
 function awaitSelection(candidates, glowClass = 'heal-glow') {
   return new Promise((resolve, reject) => {
+    // [SELECTION-FIX] In online mode, only allow selection if it's the current user's turn
+    // Exception: Sabrina (shuffle_opponent_hand) - opponent should be able to select
+    const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+    const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+    const isOnline = matchId && (typeof window !== 'undefined' && window.firebaseDatabase);
+    const isSabrinaSelection = globalThis.__silverSelectionActive; // Sabrina uses this flag
+    if (isOnline && !isSabrinaSelection) {
+      // [SELECTION-FIX] Use isCurrentPlayer1() to check if it's the current player's turn
+      // This is more reliable than checking currentPlayer string
+      const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+      const isMyTurn = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+      
+      if (!isMyTurn) {
+        console.log('[SELECTION-FIX] Blocking selection - not current player\'s turn', {
+          isMyTurn,
+          currentPlayer: globalThis.currentPlayer
+        });
+        isSelectionActive = false;
+        globalThis.__selectionActive = false;
+        resolve(null);
+        return;
+      }
+    }
 
     isSelectionActive = true;
     globalThis.__selectionActive = true;
@@ -814,7 +878,16 @@ const TRAINER_EFFECTS = {
 
   draw_cards: async (state, pk, { param1 }) => {
     const n = parseInt10(param1);
-    if (n) { globalThis.drawCards?.(state, pk, n); showPopup(`Drew ${n} card(s).`); }
+    if (n && globalThis.drawCards) {
+      await globalThis.drawCards(state, pk, n);
+      // Update state object after drawCards to ensure applyTrainerEffect can sync it
+      const owner = pk === 'p1' ? 'player1' : 'player2';
+      if (globalThis.playerState && globalThis.playerState[owner]) {
+        state[pk].deck = [...(globalThis.playerState[owner].deck || [])];
+        state[pk].hand = [...(globalThis.playerState[owner].hand || [])];
+      }
+      showPopup(`Drew ${n} card(s).`);
+    }
   },
 
   reduce_retreat_cost: async (state, pk, { param1 }) => {
@@ -1222,16 +1295,69 @@ const TRAINER_EFFECTS = {
 
   shuffle_opponent_hand_draw: async (state, pk, { param1 }) => {
     const opp = oppPk(pk);
-    const oppDeck = state[opp].deck ?? [];
-    const oppHand = state[opp].hand ?? [];
+    const oppOwner = opp === 'p1' ? 'player1' : 'player2';
     
+    // Get opponent's hand and deck from globalThis.playerState
+    const oppHand = [...(globalThis.playerState?.[oppOwner]?.hand || [])];
+    const oppDeck = globalThis.playerState?.[oppOwner]?.deck || [];
+    
+    if (oppHand.length === 0) {
+      showPopup('Opponent has no cards in hand.');
+      return;
+    }
+    
+    // Shuffle hand into deck
     oppDeck.push(...oppHand);
-    oppHand.length = 0;
     shuffleArray(oppDeck);
     
+    // Draw cards
     const n = parseInt10(param1);
-    if (n) globalThis.drawCards?.(state, opp, n);
-    showPopup(`Opponent shuffled hand and drew ${n}.`);
+    const drawnCards = [];
+    for (let i = 0; i < n && oppDeck.length > 0; i++) {
+      const card = oppDeck.shift();
+      if (card) {
+        drawnCards.push(card);
+      }
+    }
+    
+    // Update all state objects
+    globalThis.playerState[oppOwner].hand = drawnCards;
+    globalThis.playerState[oppOwner].deck = oppDeck;
+    state[opp].hand = [...drawnCards];
+    state[opp].deck = [...oppDeck];
+    
+    // Also update playerState if it exists separately
+    if (typeof playerState !== 'undefined' && playerState && playerState[oppOwner]) {
+      playerState[oppOwner].hand = [...drawnCards];
+      playerState[oppOwner].deck = [...oppDeck];
+    }
+    
+    // Sync to Firebase if in online mode
+    if (typeof globalThis.updateGameStatePartial === 'function') {
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && typeof window !== 'undefined' && window.firebaseDatabase;
+      if (isOnline) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchPlayer = (isP1 && oppOwner === 'player1') || (!isP1 && oppOwner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchPlayer}/hand`]: drawnCards,
+            [`${matchPlayer}/deck`]: oppDeck
+          });
+        } catch (error) {
+          console.error('[shuffle_opponent_hand_draw] Error syncing to Firebase:', error);
+        }
+      }
+    }
+    
+    if (globalThis.renderAllHands) globalThis.renderAllHands();
+    if (globalThis.updateDeckBubbles) globalThis.updateDeckBubbles();
+    
+    showPopup(`Opponent shuffled hand and drew ${drawnCards.length}.`);
   },
 
   summon_fossil_pokemon: async (state, pk, { param1, param2 }) => {
@@ -1715,6 +1841,7 @@ const TRAINER_EFFECTS = {
 
     const opp = oppPk(pk);
     const oppPlayer = pkToPlayer(opp);
+    const oppOwner = opp === 'p1' ? 'player1' : 'player2';
     const oppDeck = state[opp].deck ?? [];
     const oppHand = state[opp].hand ?? [];
     
@@ -1729,14 +1856,61 @@ const TRAINER_EFFECTS = {
     }
     
 
-    oppDeck.push(...oppHand);
-    oppHand.length = 0;
-    shuffleArray(oppDeck);
+    // Get hand and deck from globalThis.playerState
+    const myHand = [...(globalThis.playerState?.[oppOwner]?.hand || [])];
+    const myDeck = globalThis.playerState?.[oppOwner]?.deck || [];
     
-
-    const drawn = globalThis.drawCards?.(state, opp, pointsNeeded) ?? 0;
+    // Shuffle hand into deck
+    myDeck.push(...myHand);
+    shuffleArray(myDeck);
     
-    showPopup(`Opponent shuffled hand and drew ${pointsNeeded} card(s)!`);
+    // Draw cards
+    const drawnCards = [];
+    for (let i = 0; i < pointsNeeded && myDeck.length > 0; i++) {
+      const card = myDeck.shift();
+      if (card) {
+        drawnCards.push(card);
+      }
+    }
+    
+    // Update all state objects
+    globalThis.playerState[oppOwner].hand = drawnCards;
+    globalThis.playerState[oppOwner].deck = myDeck;
+    state[opp].hand = [...drawnCards];
+    state[opp].deck = [...myDeck];
+    
+    // Also update playerState if it exists separately
+    if (typeof playerState !== 'undefined' && playerState && playerState[oppOwner]) {
+      playerState[oppOwner].hand = [...drawnCards];
+      playerState[oppOwner].deck = [...myDeck];
+    }
+    
+    // Sync to Firebase if in online mode
+    if (typeof globalThis.updateGameStatePartial === 'function') {
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && typeof window !== 'undefined' && window.firebaseDatabase;
+      if (isOnline) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchPlayer = (isP1 && oppOwner === 'player1') || (!isP1 && oppOwner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchPlayer}/hand`]: drawnCards,
+            [`${matchPlayer}/deck`]: myDeck
+          });
+        } catch (error) {
+          console.error('[shuffle_hand_draw_points] Error syncing to Firebase:', error);
+        }
+      }
+    }
+    
+    if (globalThis.renderAllHands) globalThis.renderAllHands();
+    if (globalThis.updateDeckBubbles) globalThis.updateDeckBubbles();
+    
+    showPopup(`Opponent shuffled hand and drew ${drawnCards.length} card(s)!`);
   },
 
   heal_all_with_type_energy: async (state, pk, { param1, param2 }) => {
@@ -1965,10 +2139,97 @@ const TRAINER_EFFECTS = {
     }
     
     showPopup(`${heads} heads! Discarded ${toDiscard} energy from ${activeImg.alt}!`);
-  }
-,
+  },
 
-  
+  shuffle_hand_draw: async (state, pk, { param1 }) => {
+    const owner = pk === 'p1' ? 'player1' : 'player2';
+    const n = parseInt10(param1, 7);
+    
+    // Get hand and deck from globalThis.playerState
+    const myHand = [...(globalThis.playerState?.[owner]?.hand || [])];
+    const myDeck = globalThis.playerState?.[owner]?.deck || [];
+    
+    if (myHand.length === 0) {
+      showPopup('No cards in hand to discard.');
+      return;
+    }
+    
+    // Move hand to discard
+    if (!globalThis.playerState[owner].discard) {
+      globalThis.playerState[owner].discard = { cards: [], energyCounts: {} };
+    }
+    if (!globalThis.playerState[owner].discard.cards) {
+      globalThis.playerState[owner].discard.cards = [];
+    }
+    
+    // Add all hand cards to discard
+    for (const card of myHand) {
+      globalThis.playerState[owner].discard.cards.push({
+        set: card.set,
+        num: card.number || card.num,
+        src: card.src || card.image || `https://assets.tcgdx.net/en/tcgp/${card.set}/${String(card.number || card.num).padStart(3, '0')}/high.png`
+      });
+    }
+    
+    // Shuffle hand into deck
+    myDeck.push(...myHand);
+    shuffleArray(myDeck);
+    
+    // Draw cards
+    const drawnCards = [];
+    for (let i = 0; i < n && myDeck.length > 0; i++) {
+      const card = myDeck.shift();
+      if (card) {
+        drawnCards.push(card);
+      }
+    }
+    
+    // Update all state objects
+    globalThis.playerState[owner].hand = drawnCards;
+    globalThis.playerState[owner].deck = myDeck;
+    state[pk].hand = [...drawnCards];
+    state[pk].deck = [...myDeck];
+    
+    // Also update playerState if it exists separately
+    if (typeof playerState !== 'undefined' && playerState && playerState[owner]) {
+      playerState[owner].hand = [...drawnCards];
+      playerState[owner].deck = [...myDeck];
+      if (!playerState[owner].discard) {
+        playerState[owner].discard = { cards: [], energyCounts: {} };
+      }
+      playerState[owner].discard.cards = [...globalThis.playerState[owner].discard.cards];
+    }
+    
+    // Sync to Firebase if in online mode
+    if (typeof globalThis.updateGameStatePartial === 'function') {
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && window.firebaseDatabase;
+      if (isOnline) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchPlayer = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchPlayer}/hand`]: drawnCards,
+            [`${matchPlayer}/deck`]: myDeck,
+            [`${matchPlayer}/discard`]: globalThis.playerState[owner].discard
+          });
+        } catch (error) {
+          console.error('[shuffle_hand_draw] Error syncing to Firebase:', error);
+        }
+      }
+    }
+    
+    showPopup(`Shuffled hand into deck and drew ${drawnCards.length} card(s)!`);
+    
+    if (globalThis.renderAllHands) globalThis.renderAllHands();
+    if (globalThis.updateDeckBubbles) globalThis.updateDeckBubbles();
+    if (globalThis.renderDiscard) globalThis.renderDiscard(owner);
+    if (globalThis.updateDiscardBubbles) globalThis.updateDiscardBubbles();
+  },
 
   heal_active_and_cure_random_status: async (state, pk, { param1 }) => {
     const amount = parseInt10(param1, 10);
@@ -2052,14 +2313,55 @@ const TRAINER_EFFECTS = {
   },
 
   evolve_basic_to_stage2: async (state, pk, { param1, param2 } = {}) => {
+    console.log('[RARE-CANDY] ===== RARE CANDY EFFECT START =====');
     const owner = pkToPlayer(pk);
+    console.log('[RARE-CANDY] Effect called:', {
+      pk,
+      owner,
+      turnNumber: globalThis.turnNumber,
+      toolAttachTarget: globalThis.toolAttachTarget
+    });
     
+    // In online mode, only allow the player who used the tool to apply the effect
+    const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+    const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+    const isOnline = matchId && (typeof window !== 'undefined' && window.firebaseDatabase);
+    console.log('[RARE-CANDY] Online mode check:', {
+      isOnline,
+      matchId,
+      hasToolAttachTarget: !!globalThis.toolAttachTarget
+    });
     
+    if (isOnline) {
+      // Check if this is being played as an item (not attached as a tool)
+      const isItemPlay = globalThis.__rareCandyItemPlay === true;
+      console.log('[RARE-CANDY] Handler check:', {
+        isItemPlay,
+        toolAttachTarget: globalThis.toolAttachTarget,
+        hasItemPlayFlag: !!globalThis.__rareCandyItemPlay
+      });
+      
+      // If it's an item play, always allow it (it's the current player playing it)
+      // If it's a tool attachment, check toolAttachTarget to see if it's the opponent
+      if (!isItemPlay) {
+        // This is a tool attachment - check if it's from opponent's handler
+        const isOpponentHandler = !globalThis.toolAttachTarget;
+        if (isOpponentHandler) {
+          // This is the opponent receiving the action - don't apply the effect, just return silently
+          console.log('[RARE-CANDY] Skipping - opponent handler (tool attachment)');
+          return;
+        }
+      } else {
+        console.log('[RARE-CANDY] Allowing - item play by current player');
+      }
+    }
     
-    
-
     if (globalThis.turnNumber <= 2) {
       const msg = "You can't use Rare Candy during the first two turns.";
+      console.log('[RARE-CANDY] Turn restriction:', {
+        turnNumber: globalThis.turnNumber,
+        error: msg
+      });
       throw new Error(msg);
     }
     
@@ -2070,7 +2372,7 @@ const TRAINER_EFFECTS = {
     const eligibleBasics = [];
     
     
-
+    
     const metaPromises = allPokemon.map(async (img) => {
       try {
         const playedTurn = parseInt(img.dataset.playedTurn || '0', 10);
@@ -2151,8 +2453,15 @@ const TRAINER_EFFECTS = {
       }
     }
     
+    console.log('[RARE-CANDY] Stage 2 in hand check:', {
+      handSize: hand.length,
+      stage2Count: stage2InHand.length,
+      stage2Pokemon: stage2InHand.map(s => s.cardMeta?.name || s.handCard?.name)
+    });
+    
     if (!stage2InHand.length) {
       const msg = 'No Stage 2 Pokémon in hand.';
+      console.log('[RARE-CANDY] No Stage 2 in hand:', msg);
       throw new Error(msg);
     }
     
@@ -2302,8 +2611,17 @@ const TRAINER_EFFECTS = {
       }
     }
     
+    console.log('[RARE-CANDY] Valid pairs check:', {
+      validPairsCount: validPairs.length,
+      validPairs: validPairs.map(p => ({
+        basic: p.basicMeta?.name || p.basicImg?.alt,
+        stage2: p.stage2Meta?.name || p.handCard?.name
+      }))
+    });
+    
     if (!validPairs.length) {
       const msg = 'No valid evolution combinations. (Stage 2 must evolve from a Basic in play)';
+      console.log('[RARE-CANDY] No valid pairs:', msg);
       throw new Error(msg);
     }
     
@@ -2335,11 +2653,14 @@ const TRAINER_EFFECTS = {
     if (pairsForBasic.length === 1) {
       const { handCard, stage2Meta } = pairsForBasic[0];
       
+      // Double-check that the basic Pokemon belongs to the correct owner
+      const basicOwner = chosenBasic.closest('#player1') ? 'player1' : 'player2';
+      const finalOwner = basicOwner === owner ? owner : basicOwner;
 
       chosenBasic.dataset.evolvedViaRareCandy = 'true';
       
       await globalThis.evolveCard(
-        chosenBasic, stage2Meta, handCard, owner,
+        chosenBasic, stage2Meta, handCard, finalOwner,
         handCard.set, handCard.number || handCard.num
       );
       
@@ -2377,13 +2698,19 @@ const TRAINER_EFFECTS = {
         throw new Error('Evolution cancelled.');
       }
       
-      const { handCard, stage2Meta } = selectedPair;
+      const { handCard, stage2Meta, actualOwner } = selectedPair;
       
+      // Use the actual owner from the selected pair, or fall back to the effect owner
+      const evolveOwner = actualOwner || owner;
+      
+      // Double-check that the basic Pokemon belongs to the correct owner
+      const basicOwner = chosenBasic.closest('#player1') ? 'player1' : 'player2';
+      const finalOwner = basicOwner === evolveOwner ? evolveOwner : basicOwner;
 
       chosenBasic.dataset.evolvedViaRareCandy = 'true';
       
       await globalThis.evolveCard(
-        chosenBasic, stage2Meta, handCard, owner,
+        chosenBasic, stage2Meta, handCard, finalOwner,
         handCard.set, handCard.number || handCard.num
       );
       
@@ -3306,7 +3633,7 @@ const TRAINER_EFFECTS = {
       return;
     }
     
-    const removed = removeEnergy(oppImg, energyType, count);
+    const removed = await removeEnergy(oppImg, energyType, count);
     if (removed > 0) {
       showPopup(`Discarded ${removed} ${energyType} Energy from opponent!`);
     } else {
@@ -4090,7 +4417,7 @@ const TRAINER_EFFECTS = {
     const flip2 = await flipCoin(pk);
     
     if (flip1 === 'heads' && flip2 === 'heads') {
-      const removed = removeEnergy(oppActive, null, 1);
+      const removed = await removeEnergy(oppActive, null, 1);
       if (removed > 0) {
         showPopup('Hitting Hammer: Both heads → Discarded Energy!');
       } else {
@@ -4390,7 +4717,40 @@ const TRAINER_EFFECTS = {
     const oppOwner = opp === 'p1' ? 'player1' : 'player2';
     
 
-    const oppHandSize = (globalThis.playerState?.[oppOwner]?.hand || []).length;
+    // Get opponent's hand size - try multiple sources
+    // [COPYCAT-FIX] Get opponent's hand size BEFORE shuffling our hand to ensure accurate count
+    let oppHandSize = 0;
+    
+    // First, try from playerState (correct structure)
+    if (globalThis.playerState && globalThis.playerState[oppOwner] && globalThis.playerState[oppOwner].hand) {
+      oppHandSize = globalThis.playerState[oppOwner].hand.length;
+    }
+    
+    // If still 0, try from state object
+    if (oppHandSize === 0 && state[opp] && state[opp].hand) {
+      oppHandSize = state[opp].hand.length;
+    }
+    
+    // If still 0, try to get it from the UI directly (for online mode)
+    if (oppHandSize === 0 && typeof document !== 'undefined') {
+      const oppHandDiv = oppOwner === 'player1' ? document.querySelector('#p1Hand') : document.querySelector('#p2Hand');
+      if (oppHandDiv) {
+        const oppHandCards = oppHandDiv.querySelectorAll('img');
+        oppHandSize = oppHandCards.length;
+      }
+    }
+    
+    console.log('[Copycat] Opponent hand size:', {
+      oppOwner,
+      oppHandSize,
+      fromPlayerState: globalThis.playerState?.[oppOwner]?.hand?.length,
+      fromState: state[opp]?.hand?.length
+    });
+    
+    // [COPYCAT-FIX] Ensure we have a valid hand size
+    if (oppHandSize === 0) {
+      console.warn('[Copycat] Could not determine opponent hand size, defaulting to 0');
+    }
     
     
 
@@ -4408,10 +4768,15 @@ const TRAINER_EFFECTS = {
     }
     
 
+    // Clear hand
     globalThis.playerState[owner].hand = [];
     
 
+    // Shuffle deck
     shuffleArray(myDeck);
+    
+    // Update playerState deck
+    globalThis.playerState[owner].deck = myDeck;
     
 
     if (globalThis.animateDeckShuffle) {
@@ -4419,30 +4784,57 @@ const TRAINER_EFFECTS = {
     }
     
 
-    state[pk].hand = globalThis.playerState[owner].hand;
-    state[pk].deck = globalThis.playerState[owner].deck;
+    // Update state objects
+    state[pk].hand = [];
+    state[pk].deck = [...myDeck];
     
 
-    if (globalThis.drawCards) {
-      await globalThis.drawCards(state, pk, oppHandSize);
-    } else {
-
+    // Draw cards - use the shuffled deck directly
+      const drawnCards = [];
       for (let i = 0; i < oppHandSize && myDeck.length > 0; i++) {
         const card = myDeck.shift();
         if (card) {
-          globalThis.playerState[owner].hand.push(card);
+          drawnCards.push(card);
         }
       }
-    }
     
-
-    state[pk].hand = globalThis.playerState[owner].hand;
-    state[pk].deck = globalThis.playerState[owner].deck;
+    // Update all state objects with the drawn cards and remaining deck
+      globalThis.playerState[owner].hand = drawnCards;
+      globalThis.playerState[owner].deck = myDeck;
+      state[pk].hand = [...drawnCards];
+      state[pk].deck = [...myDeck];
+    
+    // Also update playerState if it exists separately
+    if (typeof playerState !== 'undefined' && playerState && playerState[owner]) {
+      playerState[owner].hand = [...drawnCards];
+      playerState[owner].deck = [...myDeck];
+    }
     state[opp].hand = globalThis.playerState[oppOwner].hand;
     
     const actualDrawn = globalThis.playerState[owner].hand.length;
     showPopup(`Copycat: Shuffled hand into deck, drew ${actualDrawn} card(s) (opponent has ${oppHandSize} cards)!`);
     
+    // Sync to Firebase if in online mode
+    if (typeof globalThis.updateGameStatePartial === 'function') {
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && typeof window !== 'undefined' && window.firebaseDatabase;
+      if (isOnline) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchPlayer = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchPlayer}/hand`]: drawnCards,
+            [`${matchPlayer}/deck`]: myDeck
+          });
+        } catch (error) {
+          console.error('[shuffle_hand_draw_match_opponent] Error syncing to Firebase:', error);
+        }
+      }
+    }
 
     if (globalThis.renderAllHands) globalThis.renderAllHands();
     if (globalThis.updateDeckBubbles) globalThis.updateDeckBubbles();
@@ -4450,6 +4842,9 @@ const TRAINER_EFFECTS = {
 };
 
 globalThis.TRAINER_EFFECTS = TRAINER_EFFECTS;
+if (typeof window !== 'undefined') {
+  window.TRAINER_EFFECTS = TRAINER_EFFECTS;
+}
 
 const MOVE_HANDLERS = {
 
@@ -4494,7 +4889,7 @@ const MOVE_HANDLERS = {
         const oppImg = getActiveImg(opp);
         if (oppImg) {
           const count = parseInt10(param2, 1);
-          const removed = removeEnergy(oppImg, null, count);
+          const removed = await removeEnergy(oppImg, null, count);
           if (removed > 0) {
             showPopup(`HEADS (${headsCount}) → Discarded ${removed} Energy!`);
           } else {
@@ -4540,7 +4935,7 @@ const MOVE_HANDLERS = {
         const oppImg = getActiveImg(opp);
         if (oppImg) {
           const count = parseInt10(param2, 1);
-          const removed = removeEnergy(oppImg, null, count);
+          const removed = await removeEnergy(oppImg, null, count);
           if (removed > 0) {
             showPopup(`HEADS → Discarded ${removed} Energy from opponent!`);
           } else {
@@ -4742,24 +5137,30 @@ const MOVE_HANDLERS = {
       moveRow = getMoveRow(img.alt, ctx.moveName);
     }
     const effectText = (moveRow?.effect_text || moveRow?.text || ctx?.moveRowText || '').toLowerCase();
+    const attackName = (ctx?.moveName || '').toLowerCase();
     
-
-    const countBoth = effectText.includes('both');
+    const countBoth = effectText.includes('both') || attackName === 'crystal waltz';
     
-    if (countBoth) {
-
-      const ownBench = getBenchImgs(pk).length;
-      const oppBench = getBenchImgs(oppPk(pk)).length;
-      const totalBench = ownBench + oppBench;
-      ctx.addBonus(totalBench * parseInt10(param1));
-    } else {
-
-      const benchImgs = getBenchImgs(pk).filter(img => 
+    const filterValidBench = (benchImgs) => {
+      return benchImgs.filter(img => 
         img && 
         img.alt && 
         img.dataset.set && 
         img.dataset.num
       );
+    };
+    
+    if (countBoth) {
+
+      const ownBenchImgs = filterValidBench(getBenchImgs(pk));
+      const oppBenchImgs = filterValidBench(getBenchImgs(oppPk(pk)));
+      const ownBench = ownBenchImgs.length;
+      const oppBench = oppBenchImgs.length;
+      const totalBench = ownBench + oppBench;
+      ctx.addBonus(totalBench * parseInt10(param1));
+    } else {
+
+      const benchImgs = filterValidBench(getBenchImgs(pk));
       const ownBench = benchImgs.length;
       const bonus = ownBench * parseInt10(param1);
       ctx.addBonus(bonus);
@@ -5206,19 +5607,19 @@ const MOVE_HANDLERS = {
 
   discard_energy_specific: async (s, pk, { param1, param2 }, ctx) => {
     if (!ctx.isFinal) return;
-    const removed = removeEnergy(getActiveImg(pk), param1, parseInt10(param2, 1));
+    const removed = await removeEnergy(getActiveImg(pk), param1, parseInt10(param2, 1));
     showPopup(`Discarded ${removed} ${param1} Energy.`);
   },
   
   discard_energy_all: async (s, pk, p, ctx) => {
     if (!ctx.isFinal) return;
-    removeEnergy(getActiveImg(pk), null, 999);
+    await removeEnergy(getActiveImg(pk), null, 999);
     showPopup('Discarded all Energy.');
   },
   
   discard_random_energy_from_opponent: async (s, pk, p, ctx) => {
     if (!ctx.isFinal) return;
-    removeEnergy(getActiveImg(oppPk(pk)), null, 1);
+    await removeEnergy(getActiveImg(oppPk(pk)), null, 1);
     showPopup('Discarded opponent Energy.');
   },
   
@@ -5393,7 +5794,7 @@ const MOVE_HANDLERS = {
     const activeImg = getActiveImg(pk);
     
 
-    const discarded = removeEnergy(activeImg, energyType?.toLowerCase(), parseInt10(discardCount));
+    const discarded = await removeEnergy(activeImg, energyType?.toLowerCase(), parseInt10(discardCount));
     
     if (!discarded) {
       showPopup('Not enough Energy to discard');
@@ -9194,7 +9595,7 @@ const MOVE_HANDLERS = {
     const activeImg = getActiveImg(pk);
     
 
-    const removed = removeEnergy(activeImg, energyType, 999);
+    const removed = await removeEnergy(activeImg, energyType, 999);
     
     if (removed === 0) {
       showPopup('No energy to discard.');
@@ -9340,7 +9741,7 @@ const MOVE_HANDLERS = {
 
     for (let i = 0; i < count && allPokemon.length > 0; i++) {
       const randomPokemon = allPokemon[Math.floor(Math.random() * allPokemon.length)];
-      removeEnergy(randomPokemon, null, 1);
+      await removeEnergy(randomPokemon, null, 1);
       
 
       const slot = getSlotFromImg(randomPokemon);
@@ -9362,7 +9763,7 @@ const MOVE_HANDLERS = {
     
     if (!activeImg) return;
     
-    const removed = removeEnergy(activeImg, null, count);
+    const removed = await removeEnergy(activeImg, null, count);
     if (removed > 0) {
       showPopup(`Discarded ${removed} random Energy!`);
     }
@@ -9599,7 +10000,7 @@ const MOVE_HANDLERS = {
       const activeImg = getActiveImg(pk);
       
       if (activeImg) {
-        const removed = removeEnergy(activeImg, energyType, count);
+        const removed = await removeEnergy(activeImg, energyType, count);
         if (removed > 0) {
           showPopup(`HEADS → Discarded ${removed} ${energyType} Energy!`);
         } else {
@@ -9628,7 +10029,7 @@ const MOVE_HANDLERS = {
     }
     
     if (headsCount > 0) {
-      const removed = removeEnergy(activeImg, energyType, headsCount);
+      const removed = await removeEnergy(activeImg, energyType, headsCount);
       if (removed > 0) {
         showPopup(`${headsCount} heads → Discarded ${removed} ${energyType} Energy!`);
       }
@@ -9653,7 +10054,7 @@ const MOVE_HANDLERS = {
       result = await flipCoin(pk);
       if (result === 'heads') {
         headsCount++;
-        const removed = removeEnergy(activeImg, energyType, countPerHead);
+        const removed = await removeEnergy(activeImg, energyType, countPerHead);
         if (removed === 0) break;
       }
     } while (result === 'heads');
@@ -10599,6 +11000,41 @@ const MOVE_HANDLERS = {
     deck.push(card);
     shuffleDeckAndAnimate(s, pk);
     
+    // Update globalThis.playerState
+    const owner = pk === 'p1' ? 'player1' : 'player2';
+    if (globalThis.playerState && globalThis.playerState[owner]) {
+      globalThis.playerState[owner].hand = [...hand];
+      globalThis.playerState[owner].deck = [...deck];
+    }
+    
+    // Update local playerState if it exists
+    if (typeof playerState !== 'undefined' && playerState && playerState[owner]) {
+      playerState[owner].hand = [...hand];
+      playerState[owner].deck = [...deck];
+    }
+    
+    // Sync to Firebase if in online mode
+    if (typeof globalThis.updateGameStatePartial === 'function') {
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && typeof window !== 'undefined' && window.firebaseDatabase;
+      if (isOnline) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchPlayer = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchPlayer}/hand`]: globalThis.playerState[owner].hand,
+            [`${matchPlayer}/deck`]: globalThis.playerState[owner].deck
+          });
+        } catch (error) {
+          console.error('[reveal_hand_shuffle_card] Error syncing to Firebase:', error);
+        }
+      }
+    }
+    
     showPopup(`Shuffled ${card.name || 'card'} into deck!`);
   },
 
@@ -10652,6 +11088,37 @@ const MOVE_HANDLERS = {
       deck.splice(index, 1);
     }
     
+    // Update globalThis.playerState
+    const owner = pk === 'p1' ? 'player1' : 'player2';
+    if (globalThis.playerState && globalThis.playerState[owner]) {
+      globalThis.playerState[owner].deck = [...deck];
+    }
+    
+    // Update local playerState if it exists
+    if (typeof playerState !== 'undefined' && playerState && playerState[owner]) {
+      playerState[owner].deck = [...deck];
+    }
+    
+    // Sync to Firebase if in online mode
+    if (typeof globalThis.updateGameStatePartial === 'function') {
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && typeof window !== 'undefined' && window.firebaseDatabase;
+      if (isOnline) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchPlayer = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchPlayer}/deck`]: globalThis.playerState[owner].deck
+          });
+        } catch (error) {
+          console.error('[search_basic_to_bench] Error syncing to Firebase:', error);
+        }
+      }
+    }
 
     showPopup(`Call for Family: Found ${chosen.name}!`);
 
@@ -11312,7 +11779,7 @@ const ABILITY_HANDLERS = {
         const count = parseInt10(effectParam, 1);
         const oppImg = getActiveImg(oppPk(pk));
         if (oppImg) {
-          const removed = removeEnergy(oppImg, null, count);
+          const removed = await removeEnergy(oppImg, null, count);
           showPopup(`HEADS → Discarded ${removed} Energy from opponent!`);
         } else {
           showPopup('No opponent Active Pokémon.');
@@ -11378,7 +11845,7 @@ const ABILITY_HANDLERS = {
     showPopup('Select target.');
     const target = await awaitSelection(targets);
     
-    if (target && removeEnergy(source, type, 1)) {
+    if (target && await removeEnergy(source, type, 1)) {
       attachEnergy(target, type || 'colorless');
       showPopup(`Moved energy to ${target.alt}.`);
     }
@@ -11471,7 +11938,7 @@ const ABILITY_HANDLERS = {
     
     if (source) {
 
-      if (removeEnergy(source, energyType, 1)) {
+      if (await removeEnergy(source, energyType, 1)) {
         attachEnergy(activeImg, energyType);
         showPopup(`Moved ${energyType} Energy to Active Pokemon`);
       }
@@ -12567,7 +13034,15 @@ const ABILITY_HANDLERS = {
   
 
   ,draw_on_evolution: async (state, pk, { param1 }, context = {}) => {
+    // Use globalThis.drawCards which handles all state syncing and Firebase
     const count = parseInt10(param1, 2);
+    if (globalThis.drawCards) {
+      await globalThis.drawCards(state, pk, count);
+      showPopup(`Happy Ribbon: Drew ${count} card(s)!`);
+      return;
+    }
+    
+    // Fallback if drawCards is not available
     const deck = state[pk]?.deck || [];
     
     if (deck.length === 0) {
@@ -12586,6 +13061,41 @@ const ABILITY_HANDLERS = {
 
       state[pk].hand = state[pk].hand || [];
       state[pk].hand.push(...drawn);
+      
+      // Update globalThis.playerState
+      const owner = pk === 'p1' ? 'player1' : 'player2';
+      if (globalThis.playerState && globalThis.playerState[owner]) {
+        globalThis.playerState[owner].deck = [...deck];
+        globalThis.playerState[owner].hand = [...state[pk].hand];
+      }
+      
+      // Update local playerState if it exists
+      if (typeof playerState !== 'undefined' && playerState && playerState[owner]) {
+        playerState[owner].deck = [...deck];
+        playerState[owner].hand = [...state[pk].hand];
+      }
+      
+      // Sync to Firebase if in online mode
+      if (typeof globalThis.updateGameStatePartial === 'function') {
+        const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+        const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+        const isOnline = matchId && typeof window !== 'undefined' && window.firebaseDatabase;
+        if (isOnline) {
+          const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+          const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+          const matchPlayer = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+            ? 'player1' 
+            : 'player2';
+          try {
+            await globalThis.updateGameStatePartial({
+              [`${matchPlayer}/hand`]: globalThis.playerState[owner].hand,
+              [`${matchPlayer}/deck`]: globalThis.playerState[owner].deck
+            });
+          } catch (error) {
+            console.error('[draw_on_evolution] Error syncing to Firebase:', error);
+          }
+        }
+      }
       
       showPopup(`Happy Ribbon: Drew ${drawn.length} card(s)!`);
       
@@ -12843,7 +13353,7 @@ const ABILITY_HANDLERS = {
     if (!sourceImg) return;
     
     const count = parseInt10(param1, 1);
-    const removed = removeEnergy(sourceImg, null, count);
+    const removed = await removeEnergy(sourceImg, null, count);
     
     if (removed > 0) {
       showPopup(`Unruly Claw: Discarded ${removed} Energy on evolution!`);
@@ -12906,17 +13416,19 @@ const ABILITY_HANDLERS = {
     }
     
 
-    const ownerKey = pk === 'p1' ? 'p1' : 'p2';
-    const ownerState = s?.[ownerKey];
-    
-    if (!ownerState || !ownerState.deck) {
-      console.error('[draw_card_end_of_turn] State not available for', ownerKey, 'falling back to drawCards');
-
+    // Use globalThis.drawCards which handles all state syncing and Firebase
       if (globalThis.drawCards) {
         await globalThis.drawCards(s, pk, 1);
         showPopup('Legendary Pulse: Drew 1 card.');
         return;
       }
+    
+    // Fallback if drawCards is not available
+    const ownerKey = pk === 'p1' ? 'p1' : 'p2';
+    const owner = pk === 'p1' ? 'player1' : 'player2';
+    const ownerState = s?.[ownerKey];
+    
+    if (!ownerState || !ownerState.deck) {
       showPopup('Legendary Pulse: Unable to draw card.');
       return;
     }
@@ -12926,13 +13438,44 @@ const ABILITY_HANDLERS = {
       if (!ownerState.hand) ownerState.hand = [];
       ownerState.hand.push(drawnCard);
       
+      // Update globalThis.playerState
+      if (globalThis.playerState && globalThis.playerState[owner]) {
+        globalThis.playerState[owner].deck = [...ownerState.deck];
+        globalThis.playerState[owner].hand = [...ownerState.hand];
+      }
+      
+      // Update local playerState if it exists
+      if (typeof playerState !== 'undefined' && playerState && playerState[owner]) {
+        playerState[owner].deck = [...ownerState.deck];
+        playerState[owner].hand = [...ownerState.hand];
+      }
+      
+      // Sync to Firebase if in online mode
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && typeof window !== 'undefined' && window.firebaseDatabase;
+      if (isOnline && typeof globalThis.updateGameStatePartial === 'function') {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const matchOwner = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        
+        try {
+          await globalThis.updateGameStatePartial({
+            [`${matchOwner}/deck`]: globalThis.playerState[owner].deck,
+            [`${matchOwner}/hand`]: globalThis.playerState[owner].hand
+          });
+        } catch (error) {
+          console.error('[draw_card_end_of_turn] Error syncing to Firebase:', error);
+        }
+      }
       
       if (globalThis.updateDeckBubbles) globalThis.updateDeckBubbles();
       if (globalThis.renderAllHands) globalThis.renderAllHands();
       
       showPopup('Legendary Pulse: Drew 1 card.');
       if (globalThis.logEvent) {
-        const owner = pk === 'p1' ? 'player1' : 'player2';
         globalThis.logEvent({
           player: owner,
           text: `Drew ${drawnCard.name} (Legendary Pulse)`,

@@ -630,10 +630,10 @@ onAuthStateChanged((user) => {
   if (user) {
     userInfo.style.display = 'block';
     userDisplayName.textContent = user.displayName || user.email || 'Guest';
-    document.getElementById('playOnline').textContent = 'Play Online';
+    document.getElementById('playOnline').textContent = 'Play Online (WORK IN PROGRESS)';
   } else {
     userInfo.style.display = 'none';
-    document.getElementById('playOnline').textContent = 'Play Online (Sign In Required)';
+    document.getElementById('playOnline').textContent = 'Play Online (Sign In Required) (WORK IN PROGRESS)';
   }
 });
 

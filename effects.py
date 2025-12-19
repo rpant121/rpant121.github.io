@@ -6,7 +6,7 @@ import urllib3
 # Disable SSL warnings for development (certificate chain issue)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-SET_ID = "B1"
+SET_ID = "B1a"
 BASE_URL = f"https://api.tcgdex.net/v2/en/sets/{SET_ID}"
 MOVE_EFFECTS_FILE = f"{SET_ID.lower()}_move_effects.csv"
 ABILITY_EFFECTS_FILE = f"{SET_ID.lower()}_ability_effects.csv"

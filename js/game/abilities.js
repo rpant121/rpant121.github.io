@@ -40,6 +40,44 @@ export async function applyAbilityEffect(abilityRow, ownerKey, sourceImg = null)
         });
       }
       
+      // Sync ability use to Firebase
+      const getCurrentMatchIdFn = globalThis.getCurrentMatchId;
+      const matchId = getCurrentMatchIdFn ? getCurrentMatchIdFn() : null;
+      const isOnline = matchId && window.firebaseDatabase;
+      if (isOnline && typeof globalThis.broadcastAction === 'function' && sourceImg) {
+        const isCurrentPlayer1Fn = globalThis.isCurrentPlayer1;
+        const isP1 = (isCurrentPlayer1Fn && typeof isCurrentPlayer1Fn === 'function') ? isCurrentPlayer1Fn() : false;
+        const owner = ownerKey === 'p1' || ownerKey === 'player1' ? 'player1' : 'player2';
+        const matchOwner = (isP1 && owner === 'player1') || (!isP1 && owner === 'player2') 
+          ? 'player1' 
+          : 'player2';
+        
+        try {
+          await globalThis.broadcastAction(globalThis.ACTION_TYPES?.USE_ABILITY || 'use_ability', {
+            owner: matchOwner,
+            source: {
+              set: sourceImg.dataset.set,
+              num: sourceImg.dataset.num,
+              name: sourceImg.alt,
+              instanceId: sourceImg.dataset.instanceId
+            },
+            ability: {
+              name: abilityRow.abilityName || 'Unknown',
+              effectType: abilityRow.effect_type,
+              param1: abilityRow.param1,
+              param2: abilityRow.param2
+            },
+            turnNumber: globalThis.turnNumber || 0
+          });
+          console.log('Synced ability use to Firebase:', {
+            matchOwner,
+            abilityName: abilityRow.abilityName
+          });
+        } catch (error) {
+          console.error('Error syncing ability use to Firebase:', error);
+        }
+      }
+      
       if (typeof zoomBackdrop !== 'undefined' && zoomBackdrop.classList.contains('show')) {
         zoomBackdrop.classList.remove('show');
         if (typeof currentZoom !== 'undefined') {

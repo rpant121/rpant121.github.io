@@ -25,15 +25,21 @@
     "matches": {
       ".read": "auth != null",
       ".write": "auth != null",
+      ".indexOn": ["createdAt"],
       "$matchId": {
         ".read": "auth != null && (!data.exists() || data.child('player1Id').val() === auth.uid || data.child('player2Id').val() === auth.uid)",
-        ".write": "auth != null && (newData.child('player1Id').val() === auth.uid || newData.child('player2Id').val() === auth.uid)"
+        ".write": "auth != null && (newData.child('player1Id').val() === auth.uid || newData.child('player2Id').val() === auth.uid)",
+        "actions": {
+          ".indexOn": ["timestamp"]
+        }
       }
     },
     "matchmaking": {
       "queue": {
+        ".read": "auth != null",
+        ".write": "auth != null",
         "$userId": {
-          ".read": "$userId === auth.uid",
+          ".read": "$userId === auth.uid || auth != null",
           ".write": "$userId === auth.uid"
         }
       }
