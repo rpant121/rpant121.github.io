@@ -4558,6 +4558,7 @@ import { getCurrentUser, initAuth, onAuthStateChanged } from './js/auth/auth.js'
 import { createRoom, joinRoomByCode, onRoomChange, getCurrentRoomId, leaveRoom, startGameFromRoom } from './js/online/lobby.js';
 import { joinQueue, leaveQueue, onQueueUpdate, getIsInQueue } from './js/online/matchmaking.js';
 import { initSync, onStateChange, onConnectionChange, getIsConnected, setupReconnectionHandler, updateGameStatePartial, isCurrentPlayer1, getCurrentMatchId } from './js/online/sync.js';
+import { gameState } from './js/online/game-state.js';
 import { broadcastAction, ACTION_TYPES } from './js/online/actions.js';
 import { executeActionWithValidation, executeTurnAction } from './js/online/validation.js';
 import { isMyTurn, checkTurnBeforeAction, setupTurnListener } from './js/online/turn-manager.js';
@@ -4606,6 +4607,7 @@ globalThis.setupReconnectionHandler = setupReconnectionHandler;
 globalThis.updateGameStatePartial = updateGameStatePartial;
 globalThis.isCurrentPlayer1 = isCurrentPlayer1;
 globalThis.getCurrentMatchId = getCurrentMatchId;
+globalThis.gameState = gameState;
 globalThis.executeActionWithValidation = executeActionWithValidation;
 globalThis.executeTurnAction = executeTurnAction;
 globalThis.isMyTurn = isMyTurn;
@@ -4657,7 +4659,7 @@ globalThis.addTrainerToDiscard = addTrainerToDiscard;
 
 </head>
 <body>
-<h1>Pokémon TCG Pocket Battle - Online</h1>
+<h1>TCG Pocket Battle - Online</h1>
 <div id="connectionStatus" style="position: fixed; top: 60px; right: 10px; background: #2a2f36; padding: 0.5rem 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; display: none;">
   <div style="display: flex; align-items: center; gap: 0.5rem; color: #e5e7eb;">
     <div id="connectionDot" style="width: 10px; height: 10px; border-radius: 50%; background: #f87171;"></div>
@@ -5915,7 +5917,8 @@ function setupDropHandlers() {
               return;
             }
             
-            const slotImg = slot.querySelector('img');
+            // [TOOL-FIX] Query for card image specifically (not tool thumb)
+            const slotImg = slot.querySelector('img:not(.tool-thumb)');
             const isActive = slot.closest('.active');
             const isBench = slot.closest('.bench');
             
@@ -5991,7 +5994,8 @@ function setupDropHandlers() {
               
               if (isActive) {
                 const act = slotOwner === 'player1' ? p1Active : p2Active;
-                if (act.querySelector('img')) {
+                // [TOOL-FIX] Check for card image specifically (not tool thumb)
+                if (act.querySelector('img:not(.tool-thumb)')) {
                   showPopup('Active slot is already occupied.');
                   return;
                 }
@@ -6001,7 +6005,8 @@ function setupDropHandlers() {
               if (isBench) {
                 const bench = slotOwner === 'player1' ? p1Bench : p2Bench;
                 const benchSlots = bench.querySelectorAll('.card-slot');
-                const occupiedSlots = Array.from(benchSlots).filter(s => s.querySelector('img'));
+                // [TOOL-FIX] Check for card images specifically (not tool thumbs)
+                const occupiedSlots = Array.from(benchSlots).filter(s => s.querySelector('img:not(.tool-thumb)'));
                 if (occupiedSlots.length >= 3) {
                   showPopup('Bench is full.');
                   return;
@@ -6477,7 +6482,8 @@ globalThis.forceSwitchSpecific = function(state, pk, benchImg) {
   }
   
   
-  const activeImg = activeSlot.querySelector('img');
+  // [FORCE-SWITCH-FIX] Query for card image specifically (not tool thumb)
+  const activeImg = activeSlot.querySelector('img:not(.tool-thumb)');
   if (!activeImg) {
     console.error('[forceSwitchSpecific] No active Pokemon to swap');
     return;
@@ -6517,8 +6523,9 @@ globalThis.forceSwitchSpecific = function(state, pk, benchImg) {
   activeSlot.innerHTML = benchHTML;
   benchSlot.innerHTML = activeHTML;
   
-  const newActiveImg = activeSlot.querySelector('img');
-  const newBenchImg = benchSlot.querySelector('img');
+  // [FORCE-SWITCH-FIX] Query for card images specifically (not tool thumbs)
+  const newActiveImg = activeSlot.querySelector('img:not(.tool-thumb)');
+  const newBenchImg = benchSlot.querySelector('img:not(.tool-thumb)');
   
   
   if (newActiveImg && newBenchImg) {
@@ -6673,7 +6680,8 @@ function satisfiedFlags(pips, costArr, pokemonImg = null) {
     
     const oppPk = pk === 'p1' ? 'p2' : 'p1';
     const oppActive = oppPk === 'p1' ? p1Active : p2Active;
-    const oppActiveImg = oppActive?.querySelector('img');
+    // [OPPONENT-ACTIVE-FIX] Query for card image specifically (not tool thumb)
+    const oppActiveImg = oppActive?.querySelector('img:not(.tool-thumb)');
     
     if (oppActiveImg) {
       try {
@@ -6780,7 +6788,8 @@ function makeCostIcons(costArr, slot, pokemonImg = null) {
 }
 
 const parseDamage=v=>{const m=String(v??'').match(/\d+/);return m?parseInt(m[0],10):0};
-const getActiveImage=p=>activeFor(p).querySelector('img')||null;
+// [GET-ACTIVE-IMAGE-FIX] Query for card image specifically (not tool thumb)
+const getActiveImage=p=>activeFor(p).querySelector('img:not(.tool-thumb)')||null;
 
 function pushCardToDiscard(owner,img){
   if (!playerState[owner]) {
@@ -6962,7 +6971,8 @@ async function pointsForCard(set,num){
   }
   return 1;
 }
-const checkBenchOut=owner=>[...benchFor(owner).querySelectorAll('img')].length===0;
+// [BENCH-OUT-FIX] Check for card images specifically (not tool thumbs)
+const checkBenchOut=owner=>[...benchFor(owner).querySelectorAll('img:not(.tool-thumb)')].length===0;
 
 function showVictory(winnerKey,reason){
   if(gameOver)return;
@@ -7057,7 +7067,8 @@ async function handleKnockOut(owner, img, wasActive = false){
             
             
             const pk = owner === 'player1' ? 'p1' : 'p2';
-            const bench = [...benchFor(owner).querySelectorAll('img')];
+            // [BENCH-CHECK-FIX] Query for card images specifically (not tool thumbs)
+            const bench = [...benchFor(owner).querySelectorAll('img:not(.tool-thumb)')];
             
             if (bench.length >= 2) {
               showPopup('Electrical Cord: Select 2 Benched Pokémon to receive Lightning Energy');
@@ -8641,7 +8652,8 @@ async function handleAttackClick(attack, meta, ownerKey, activeDiv) {
       const activeArea = typeof activeFor === 'function' ? activeFor(foe) : null;
       if (activeArea) {
         const activeSlot = activeArea.querySelector('.card-slot');
-        foeImg = activeSlot?.querySelector('img');
+        // [KNOCKOUT-FOE-FIX] Query for card image specifically (not tool thumb)
+        foeImg = activeSlot?.querySelector('img:not(.tool-thumb)');
       }
     }
     
@@ -8801,8 +8813,9 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
     const benchDiv = benchFor(ownerKey);
     if (benchDiv) {
       const benchSlots = benchDiv.querySelectorAll('.card-slot');
+      // [BENCH-OCCUPIED-FIX] Check for card images specifically (not tool thumbs)
       const occupied = Array.from(benchSlots).filter(s => {
-        const img = s.querySelector('img');
+        const img = s.querySelector('img:not(.tool-thumb)');
         return img && img.dataset.set && img.dataset.num;
       });
       hasBench = occupied.length > 0;
@@ -8813,8 +8826,9 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
     const bench = document.querySelector(`#${pk}-bench`);
     if (bench) {
       const benchSlots = bench.querySelectorAll('.card-slot');
+      // [BENCH-OCCUPIED-FIX] Check for card images specifically (not tool thumbs)
       const occupied = Array.from(benchSlots).filter(s => {
-        const img = s.querySelector('img');
+        const img = s.querySelector('img:not(.tool-thumb)');
         return img && img.dataset.set && img.dataset.num;
       });
       hasBench = occupied.length > 0;
@@ -8848,7 +8862,8 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
   }
   
   
-  const benchImgs = benchDiv.querySelectorAll('img');
+  // [PROMOTION-FLOW-FIX] Query for card images specifically (not tool thumbs)
+  const benchImgs = benchDiv.querySelectorAll('img:not(.tool-thumb)');
   benchImgs.forEach(img => {
     if (img.dataset.set && img.dataset.num) {
       img.classList.add('promote-glow');
@@ -8888,7 +8903,8 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
         const activeDiv = activeFor(ownerKey);
         const activeSlot = activeDiv.querySelector('.card-slot');
         const benchSlot = chosenImg.closest('.card-slot');
-        const activeImg = activeSlot.querySelector('img');
+        // [RETREAT-FIX] Query for card image specifically (not tool thumb)
+        const activeImg = activeSlot.querySelector('img:not(.tool-thumb)');
         
         
         // [RETREAT-LOGGING] Log bench state before retreat
@@ -8985,45 +9001,51 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
             benchEnergyPips.remove();
           }
           
-          // [RETREAT-DUPLICATE-FIX] Clear ALL images (including tool thumbs) from both slots before appending to prevent duplicates
-          // Tool thumbs are also <img> elements, so we need to remove them too
-          const allActiveImgs = activeSlot.querySelectorAll('img');
-          const allBenchImgs = benchSlot.querySelectorAll('img');
-          for (const img of allActiveImgs) {
-            // Remove all images except the one we're about to append (chosenImg)
-            // This includes tool thumbs (.tool-thumb) and the actual card image
-            if (img !== chosenImg && img.parentNode === activeSlot) {
+          // [RETREAT-DUPLICATE-FIX] Clear ONLY card images (not tool thumbs) from both slots before appending
+          // Tool thumbs are handled separately via detachAttachments/attachAttachments
+          // We only want to remove the actual Pokemon card images, not tool thumbs
+          const allActiveCardImgs = activeSlot.querySelectorAll('img:not(.tool-thumb)');
+          const allBenchCardImgs = benchSlot.querySelectorAll('img:not(.tool-thumb)');
+          for (const img of allActiveCardImgs) {
+            // Remove all card images except the one we're about to append (chosenImg)
+            if (img !== chosenImg && img.parentNode === activeSlot && !img.classList.contains('tool-thumb')) {
               activeSlot.removeChild(img);
             }
           }
-          for (const img of allBenchImgs) {
-            // Remove all images except the one we're about to append (activeImg)
-            if (img !== activeImg && img.parentNode === benchSlot) {
+          for (const img of allBenchCardImgs) {
+            // Remove all card images except the one we're about to append (activeImg)
+            if (img !== activeImg && img.parentNode === benchSlot && !img.classList.contains('tool-thumb')) {
               benchSlot.removeChild(img);
             }
           }
           
-          // [RETREAT-DUPLICATE-FIX] Double-check: ensure slots are completely clear of images before appending
-          const remainingActiveImgs = activeSlot.querySelectorAll('img');
-          const remainingBenchImgs = benchSlot.querySelectorAll('img');
-          if (remainingActiveImgs.length > 0 || remainingBenchImgs.length > 0) {
-            console.warn('[RETREAT-DUPLICATE-FIX] Images still present after removal attempt:', {
-              activeCount: remainingActiveImgs.length,
-              benchCount: remainingBenchImgs.length,
-              activeImgs: Array.from(remainingActiveImgs).map(img => ({ alt: img.alt, className: img.className })),
-              benchImgs: Array.from(remainingBenchImgs).map(img => ({ alt: img.alt, className: img.className }))
+          // [RETREAT-DUPLICATE-FIX] Final check: ensure no duplicate card images remain
+          const remainingActiveCardImgs = activeSlot.querySelectorAll('img:not(.tool-thumb)');
+          const remainingBenchCardImgs = benchSlot.querySelectorAll('img:not(.tool-thumb)');
+          if (remainingActiveCardImgs.length > 1 || remainingBenchCardImgs.length > 1) {
+            console.error('[RETREAT-DUPLICATE-FIX] DUPLICATE CARD IMAGES DETECTED:', {
+              activeCount: remainingActiveCardImgs.length,
+              benchCount: remainingBenchCardImgs.length,
+              activeImgs: Array.from(remainingActiveCardImgs).map(img => ({ alt: img.alt, className: img.className, instanceId: img.dataset.instanceId })),
+              benchImgs: Array.from(remainingBenchCardImgs).map(img => ({ alt: img.alt, className: img.className, instanceId: img.dataset.instanceId }))
             });
-            // Force remove all remaining images
-            remainingActiveImgs.forEach(img => {
-              if (img !== chosenImg && img.parentNode === activeSlot) {
-                activeSlot.removeChild(img);
+            // Emergency cleanup: keep only the first card image (the one we're appending)
+            while (remainingActiveCardImgs.length > 1) {
+              const toRemove = Array.from(remainingActiveCardImgs).find(img => img !== chosenImg);
+              if (toRemove && toRemove.parentNode === activeSlot) {
+                activeSlot.removeChild(toRemove);
+              } else {
+                break; // Prevent infinite loop
               }
-            });
-            remainingBenchImgs.forEach(img => {
-              if (img !== activeImg && img.parentNode === benchSlot) {
-                benchSlot.removeChild(img);
+            }
+            while (remainingBenchCardImgs.length > 1) {
+              const toRemove = Array.from(remainingBenchCardImgs).find(img => img !== activeImg);
+              if (toRemove && toRemove.parentNode === benchSlot) {
+                benchSlot.removeChild(toRemove);
+              } else {
+                break; // Prevent infinite loop
               }
-            });
+            }
           }
           
           // [RETREAT-DUPLICATE-FIX] Only append if not already in target slot
@@ -9035,8 +9057,9 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
           }
           
           // [RETREAT-DUPLICATE-FIX] Verify no duplicates after swap
-          const activeAfter = activeSlot.querySelectorAll('img');
-          const benchAfter = benchSlot.querySelectorAll('img');
+          // [RETREAT-DUPLICATE-FIX] Check for duplicate CARD images (not tool thumbs)
+          const activeAfter = activeSlot.querySelectorAll('img:not(.tool-thumb)');
+          const benchAfter = benchSlot.querySelectorAll('img:not(.tool-thumb)');
           if (activeAfter.length > 1 || benchAfter.length > 1) {
             console.error('[RETREAT-DUPLICATE-FIX] DUPLICATE DETECTED after retreat swap!', {
               activeCount: activeAfter.length,
@@ -9140,7 +9163,8 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
         
         if (typeof markSlot === 'function') {
           markSlot(activeSlot, true);
-          markSlot(benchSlot, !!benchSlot.querySelector('img'));
+          // [MARK-SLOT-FIX] Check for card image specifically (not tool thumb)
+          markSlot(benchSlot, !!benchSlot.querySelector('img:not(.tool-thumb)'));
         }
         
         // Update playerState.bench immediately
@@ -9182,8 +9206,9 @@ async function handleRetreat(activeDiv, meta, retreatCost) {
               : 'player2';
             
             try {
-              const newActiveImg = activeSlot.querySelector('img');
-              const newBenchImg = benchSlot.querySelector('img');
+              // [RETREAT-SYNC-FIX] Query for card images specifically (not tool thumbs)
+              const newActiveImg = activeSlot.querySelector('img:not(.tool-thumb)');
+              const newBenchImg = benchSlot.querySelector('img:not(.tool-thumb)');
               
               if (newActiveImg) {
                 const activeData = {
@@ -9420,7 +9445,8 @@ function computeRetreatCost(activeDiv, meta) {
     
     const pk = activeDiv.closest('#player1') ? 'p1' : 'p2';
     const benchDiv = pk === 'p1' ? p1Bench : p2Bench;
-    const benchImgs = benchDiv ? [...benchDiv.querySelectorAll('img')] : [];
+    // [RETREAT-COST-FIX] Query for card images specifically (not tool thumbs)
+    const benchImgs = benchDiv ? [...benchDiv.querySelectorAll('img:not(.tool-thumb)')] : [];
 
     
     
@@ -9514,7 +9540,8 @@ function addRetreatRow(menu, activeDiv, meta){
   btn.appendChild(arrow);
 
     const canPay = costCount === 0 || canPayCostFromAPI(slot, Array(costCount).fill('colorless'));
-  const hasBench = [...benchFor(currentPlayer).querySelectorAll('img')].length > 0;
+  // [BENCH-CHECK-FIX] Query for card images specifically (not tool thumbs)
+  const hasBench = [...benchFor(currentPlayer).querySelectorAll('img:not(.tool-thumb)')].length > 0;
 
   const activeImg = activeDiv.querySelector('img');
   const st = (activeImg?.dataset.status || '').toLowerCase();
@@ -10218,9 +10245,10 @@ try {
             
             const activeDiv = owner === 'player1' ? p1Active : p2Active;
             const benchDiv = owner === 'player1' ? p1Bench : p2Bench;
+            // [EVOLUTION-MATCH-FIX] Query for card images specifically (not tool thumbs)
             const pokemonInPlay = [
-              ...(activeDiv?.querySelectorAll('img') || []),
-              ...(benchDiv?.querySelectorAll('img') || [])
+              ...(activeDiv?.querySelectorAll('img:not(.tool-thumb)') || []),
+              ...(benchDiv?.querySelectorAll('img:not(.tool-thumb)') || [])
             ];
             
             for (const pokemonImg of pokemonInPlay) {
@@ -10761,9 +10789,10 @@ async function evolveCard(target,meta,handCard,owner,set,num){
     
     const oppActive = oppPk === 'p1' ? p1Active : p2Active;
     const oppBench = oppPk === 'p1' ? p1Bench : p2Bench;
+    // [EVOLUTION-BLOCK-FIX] Query for card images specifically (not tool thumbs)
     const oppPokemon = [
-      ...(oppActive?.querySelectorAll('img') || []),
-      ...(oppBench?.querySelectorAll('img') || [])
+      ...(oppActive?.querySelectorAll('img:not(.tool-thumb)') || []),
+      ...(oppBench?.querySelectorAll('img:not(.tool-thumb)') || [])
     ];
     
     for (const oppImg of oppPokemon) {
@@ -10895,7 +10924,8 @@ const energyBox = slot.querySelector('.energy-pips');
 // Reuse hpOverlay that was already queried above for HP calculation
 const toolThumb = slot.querySelector('.tool-thumb');
 
-const oldImg = slot.querySelector('img'); 
+// [EVOLUTION-TOOL-FIX] Query for card image specifically (not tool thumb)
+const oldImg = slot.querySelector('img:not(.tool-thumb)'); 
 const hadEnergy = !!energyBox;
 const hadHP     = !!hpOverlay;
 const hadTool   = !!toolThumb;
@@ -10921,7 +10951,25 @@ if (handCard && typeof handCard.getBoundingClientRect === 'function') {
   }
 }
 
-if (oldImg) oldImg.remove();
+// [EVOLUTION-TOOL-FIX] Remove old card image but preserve tool thumb
+// Query for card image specifically (not tool thumb)
+const oldCardImg = slot.querySelector('img:not(.tool-thumb)');
+if (oldCardImg) oldCardImg.remove();
+
+// [EVOLUTION-DUPLICATE-FIX] Ensure no duplicate card images exist before inserting
+const existingCardImgs = slot.querySelectorAll('img:not(.tool-thumb)');
+if (existingCardImgs.length > 0) {
+  console.warn('[EVOLUTION-DUPLICATE-FIX] Card images still present before evolution:', {
+    count: existingCardImgs.length,
+    imgs: Array.from(existingCardImgs).map(img => ({ alt: img.alt, className: img.className }))
+  });
+  // Remove all existing card images
+  existingCardImgs.forEach(img => {
+    if (img !== evo && img.parentNode === slot) {
+      slot.removeChild(img);
+    }
+  });
+}
 
 slot.insertBefore(evo, slot.firstChild);
 
@@ -10939,9 +10987,13 @@ if (handCardForAnimation) {
 if (hadEnergy) slot.appendChild(energyBox);
 if (hadHP)     slot.appendChild(hpOverlay);
 if (hadTool && toolThumb) {
-  // Only append tool if it doesn't already exist to prevent double image
+  // [EVOLUTION-TOOL-FIX] Remove any existing tool thumb before appending to prevent duplicates
   const existingTool = slot.querySelector('.tool-thumb');
-  if (!existingTool) {
+  if (existingTool && existingTool !== toolThumb) {
+    existingTool.remove();
+  }
+  // Only append if not already in slot
+  if (toolThumb.parentNode !== slot) {
     slot.appendChild(toolThumb);
   }
 }
@@ -12507,7 +12559,8 @@ const bench = owner === 'player1' ? p1Bench : p2Bench;
 let placedTo = 'bench';
 let targetSlot = null;
 
-if (!act.querySelector('img')) {
+// [ACTIVE-CHECK-FIX] Check for card image specifically (not tool thumb)
+if (!act.querySelector('img:not(.tool-thumb)')) {
   targetSlot = act.querySelector('.card-slot');
   placedTo = 'active';
 } else {
@@ -13013,9 +13066,10 @@ async function showAttackMenuFor(cardImg, meta) {
             
             const activeDiv = owner === 'player1' ? p1Active : p2Active;
             const benchDiv = owner === 'player1' ? p1Bench : p2Bench;
+            // [EVOLUTION-MATCH-FIX] Query for card images specifically (not tool thumbs)
             const pokemonInPlay = [
-              ...(activeDiv?.querySelectorAll('img') || []),
-              ...(benchDiv?.querySelectorAll('img') || [])
+              ...(activeDiv?.querySelectorAll('img:not(.tool-thumb)') || []),
+              ...(benchDiv?.querySelectorAll('img:not(.tool-thumb)') || [])
             ];
             
             for (const pokemonImg of pokemonInPlay) {
@@ -13142,9 +13196,10 @@ async function showAttackMenuFor(cardImg, meta) {
             
             const activeDiv = owner === 'player1' ? p1Active : p2Active;
             const benchDiv = owner === 'player1' ? p1Bench : p2Bench;
+            // [EVOLUTION-MATCH-FIX] Query for card images specifically (not tool thumbs)
             const pokemonInPlay = [
-              ...(activeDiv?.querySelectorAll('img') || []),
-              ...(benchDiv?.querySelectorAll('img') || [])
+              ...(activeDiv?.querySelectorAll('img:not(.tool-thumb)') || []),
+              ...(benchDiv?.querySelectorAll('img:not(.tool-thumb)') || [])
             ];
             
             for (const pokemonImg of pokemonInPlay) {
@@ -13821,7 +13876,8 @@ function detachAttachments(slot){
   const hp        = slot.querySelector('.hp-overlay');
   const toolThumb = slot.querySelector('.tool-thumb');
   
-  const pokemonImg = slot.querySelector('img');
+  // [DETACH-FIX] Query for card image specifically (not tool thumb) to get correct HP values
+  const pokemonImg = slot.querySelector('img:not(.tool-thumb)');
   const pokemonName = pokemonImg?.alt || 'unknown';
   const slotType = slot.closest('.active') ? 'active' : 'bench';
   
@@ -13887,7 +13943,8 @@ function attachAttachments(slot, pack){
   if (!slot || !pack) return;
   const { energy, hp, toolThumb, toolData, maxHp } = pack;
   
-  const pokemonImg = slot.querySelector('img');
+  // [ATTACH-FIX] Query for card image specifically (not tool thumb) to get correct Pokemon
+  const pokemonImg = slot.querySelector('img:not(.tool-thumb)');
   const pokemonName = pokemonImg?.alt || 'unknown';
   const slotType = slot.closest('.active') ? 'active' : 'bench';
   
@@ -13936,16 +13993,22 @@ function attachAttachments(slot, pack){
       hp.textContent = hpText;
       
       // [HP-FIX] Call setHpOnImage to ensure HP overlay is correctly displayed
-      // This ensures the HP is visually correct and dataset is in sync
-      const baseHpForDisplay = pack.maxHp || pack.baseHp || pack.chp;
-      if (typeof setHpOnImage === 'function') {
-        setHpOnImage(pokemonImg, baseHpForDisplay, pack.chp);
+      // Use baseHp (not maxHp) as the base to preserve damage correctly
+      // maxHp is only for display, baseHp is the actual base HP
+      const baseHpForDisplay = pack.baseHp || parseInt(pokemonImg.dataset.hp || '0', 10) || pack.chp;
+      const currentHp = pack.chp;
+      if (typeof setHpOnImage === 'function' && currentHp !== null && currentHp !== undefined) {
+        // [HP-FIX] Only call setHpOnImage if we have valid HP values
+        // This prevents resetting HP to full
+        setHpOnImage(pokemonImg, baseHpForDisplay, currentHp);
       }
     } else {
       // [HP-FIX] Even if no HP overlay, still call setHpOnImage to create/update it
-      const baseHpForDisplay = pack.maxHp || pack.baseHp || pack.chp;
-      if (typeof setHpOnImage === 'function') {
-        setHpOnImage(pokemonImg, baseHpForDisplay, pack.chp);
+      // Use baseHp (not maxHp) as the base to preserve damage
+      const baseHpForDisplay = pack.baseHp || pack.chp || parseInt(pokemonImg.dataset.hp || '0', 10);
+      const currentHp = pack.chp;
+      if (typeof setHpOnImage === 'function' && currentHp !== null && currentHp !== undefined) {
+        setHpOnImage(pokemonImg, baseHpForDisplay, currentHp);
       }
     }
     
@@ -13958,15 +14021,23 @@ function attachAttachments(slot, pack){
       datasetHp: pokemonImg.dataset.hp,
       hasHpOverlay: !!hp
     });
-  } else if (pokemonImg && hp) {
-    // [HP-FIX] If we have HP overlay but no pack.chp, try to preserve existing HP
-    slot.appendChild(hp);
+  } else if (pokemonImg) {
+    // [HP-FIX] Even if no HP overlay in pack, try to preserve existing HP from image dataset
+    if (hp) {
+      slot.appendChild(hp);
+    }
     const existingChp = pokemonImg.dataset.chp || pokemonImg.dataset.hp;
-    if (existingChp) {
+    const existingBaseHp = pokemonImg.dataset.hp;
+    if (existingChp && existingBaseHp) {
+      // [HP-FIX] Preserve existing HP and call setHpOnImage to ensure overlay is correct
       pokemonImg.dataset.chp = String(existingChp);
+      if (typeof setHpOnImage === 'function') {
+        setHpOnImage(pokemonImg, parseInt(existingBaseHp, 10), parseInt(existingChp, 10));
+      }
       console.log('[ATTACH-ATTACHMENTS-DEBUG] Preserved existing HP:', {
         pokemon: pokemonImg.alt,
-        existingChp
+        existingChp,
+        existingBaseHp
       });
     }
   }
@@ -14151,7 +14222,8 @@ function beginPromotionFlow(owner){
             : 'player2';
           
           try {
-            const promotedImg = activeSlot.querySelector('img');
+            // [PROMOTION-SYNC-FIX] Query for card image specifically (not tool thumb)
+            const promotedImg = activeSlot.querySelector('img:not(.tool-thumb)');
             if (promotedImg) {
               const cardData = {
                 set: promotedImg.dataset.set,
@@ -14272,44 +14344,50 @@ function beginPromotionFlow(owner){
       benchSlot.removeChild(chosenImg);
     }
 
-    // [SABRINA-RETREAT-PATTERN] Clear ALL images (including tool thumbs) from both slots (safety check)
-    // Tool thumbs are also <img> elements, so we need to remove them too
-    const allActiveImgs = activeSlot.querySelectorAll('img');
-    const allBenchImgs = benchSlot.querySelectorAll('img');
-    for (const img of allActiveImgs) {
-      // Remove all images except the one we're about to append (chosenImg)
-      if (img !== chosenImg && img.parentNode === activeSlot) {
+    // [SABRINA-RETREAT-PATTERN] Clear ONLY card images (not tool thumbs) from both slots
+    // Tool thumbs are handled separately via detachAttachments/attachAttachments
+    const allActiveCardImgs = activeSlot.querySelectorAll('img:not(.tool-thumb)');
+    const allBenchCardImgs = benchSlot.querySelectorAll('img:not(.tool-thumb)');
+    for (const img of allActiveCardImgs) {
+      // Remove all card images except the one we're about to append (chosenImg)
+      if (img !== chosenImg && img.parentNode === activeSlot && !img.classList.contains('tool-thumb')) {
         activeSlot.removeChild(img);
       }
     }
-    for (const img of allBenchImgs) {
-      // Remove all images except the one we're about to append (activeImg)
-      if (img !== activeImg && img.parentNode === benchSlot) {
+    for (const img of allBenchCardImgs) {
+      // Remove all card images except the one we're about to append (activeImg)
+      if (img !== activeImg && img.parentNode === benchSlot && !img.classList.contains('tool-thumb')) {
         benchSlot.removeChild(img);
       }
     }
     
-    // [SABRINA-DUPLICATE-FIX] Double-check: ensure slots are completely clear of images before appending
-    const remainingActiveImgs = activeSlot.querySelectorAll('img');
-    const remainingBenchImgs = benchSlot.querySelectorAll('img');
-    if (remainingActiveImgs.length > 0 || remainingBenchImgs.length > 0) {
-      console.warn('[SABRINA-DUPLICATE-FIX] Images still present after removal attempt:', {
-        activeCount: remainingActiveImgs.length,
-        benchCount: remainingBenchImgs.length,
-        activeImgs: Array.from(remainingActiveImgs).map(img => ({ alt: img.alt, className: img.className })),
-        benchImgs: Array.from(remainingBenchImgs).map(img => ({ alt: img.alt, className: img.className }))
+    // [SABRINA-DUPLICATE-FIX] Final check: ensure no duplicate card images remain
+    const remainingActiveCardImgs = activeSlot.querySelectorAll('img:not(.tool-thumb)');
+    const remainingBenchCardImgs = benchSlot.querySelectorAll('img:not(.tool-thumb)');
+    if (remainingActiveCardImgs.length > 1 || remainingBenchCardImgs.length > 1) {
+      console.error('[SABRINA-DUPLICATE-FIX] DUPLICATE CARD IMAGES DETECTED:', {
+        activeCount: remainingActiveCardImgs.length,
+        benchCount: remainingBenchCardImgs.length,
+        activeImgs: Array.from(remainingActiveCardImgs).map(img => ({ alt: img.alt, className: img.className, instanceId: img.dataset.instanceId })),
+        benchImgs: Array.from(remainingBenchCardImgs).map(img => ({ alt: img.alt, className: img.className, instanceId: img.dataset.instanceId }))
       });
-      // Force remove all remaining images
-      remainingActiveImgs.forEach(img => {
-        if (img !== chosenImg && img.parentNode === activeSlot) {
-          activeSlot.removeChild(img);
+      // Emergency cleanup: keep only the first card image
+      while (remainingActiveCardImgs.length > 1) {
+        const toRemove = Array.from(remainingActiveCardImgs).find(img => img !== chosenImg);
+        if (toRemove && toRemove.parentNode === activeSlot) {
+          activeSlot.removeChild(toRemove);
+        } else {
+          break;
         }
-      });
-      remainingBenchImgs.forEach(img => {
-        if (img !== activeImg && img.parentNode === benchSlot) {
-          benchSlot.removeChild(img);
+      }
+      while (remainingBenchCardImgs.length > 1) {
+        const toRemove = Array.from(remainingBenchCardImgs).find(img => img !== activeImg);
+        if (toRemove && toRemove.parentNode === benchSlot) {
+          benchSlot.removeChild(toRemove);
+        } else {
+          break;
         }
-      });
+      }
     }
     
     // [SABRINA-RETREAT-PATTERN] Append images to new slots (like retreat)
@@ -14339,8 +14417,9 @@ function beginPromotionFlow(owner){
     }
     
     // [SABRINA-RETREAT-PATTERN] Animate the swap
-    const newActiveImg = activeSlot.querySelector('img');
-    const newBenchImg = benchSlot.querySelector('img');
+    // [SABRINA-SWAP-FIX] Query for card images specifically (not tool thumbs)
+    const newActiveImg = activeSlot.querySelector('img:not(.tool-thumb)');
+    const newBenchImg = benchSlot.querySelector('img:not(.tool-thumb)');
     if (newActiveImg && newBenchImg) {
       animateSlideSwap(chosenImg, activeSlot, newActiveImg, chosenRect);
       animateSlideSwap(activeImg, benchSlot, newBenchImg, activeRect);
@@ -14399,7 +14478,8 @@ function beginPromotionFlow(owner){
           
           try {
             // Get promoted Pokemon data
-            const promotedImg = activeSlot.querySelector('img');
+            // [PROMOTION-SYNC-FIX] Query for card image specifically (not tool thumb)
+            const promotedImg = activeSlot.querySelector('img:not(.tool-thumb)');
             if (promotedImg) {
               const cardData = {
                 set: promotedImg.dataset.set,
@@ -16971,6 +17051,34 @@ async function initializeGame(matchId) {
     }
     await initSyncFn(matchId, user.uid);
     
+    // [GAME-STATE-MANAGER] Example: Subscribe to state changes
+    // This demonstrates the new state manager API
+    // The state manager is now available at globalThis.gameState
+    if (globalThis.gameState) {
+      console.log('[GAME-STATE-MANAGER] State manager available, subscribing to changes...');
+      
+      // Example subscription (can be used for reactive UI updates)
+      globalThis.gameState.subscribe((newState, oldState) => {
+        console.log('[GAME-STATE-MANAGER] State changed:', {
+          turnNumber: newState?.turnNumber,
+          currentPlayer: newState?.currentPlayer,
+          p1Points: newState?.p1Points,
+          p2Points: newState?.p2Points
+        });
+        
+        // Example: Get player state using match player IDs (no mapping needed!)
+        const myPlayerId = isCurrentPlayer1() ? 'player1' : 'player2';
+        const myHand = globalThis.gameState.getHand(myPlayerId);
+        const myActive = globalThis.gameState.getActivePokemon(myPlayerId);
+        
+        console.log('[GAME-STATE-MANAGER] My state:', {
+          playerId: myPlayerId,
+          handSize: myHand.length,
+          activePokemon: myActive?.name
+        });
+      });
+    }
+    
     // Set up reconnection handler
     setupReconnectionHandler();
     
@@ -17592,7 +17700,8 @@ async function initializeGame(matchId) {
               const slots = bench.querySelectorAll('.card-slot');
               // Clear all existing images first, then render the current bench
               slots.forEach(slot => {
-                const existingImg = slot.querySelector('img');
+                // [GAME-STATE-SYNC-FIX] Query for card images specifically (not tool thumbs)
+                const existingImg = slot.querySelector('img:not(.tool-thumb)');
                 if (existingImg) {
                   existingImg.remove();
                 }
@@ -17677,7 +17786,8 @@ async function initializeGame(matchId) {
               const slots = bench.querySelectorAll('.card-slot');
               // Clear all existing images first, then render the current bench
               slots.forEach(slot => {
-                const existingImg = slot.querySelector('img');
+                // [GAME-STATE-SYNC-FIX] Query for card images specifically (not tool thumbs)
+                const existingImg = slot.querySelector('img:not(.tool-thumb)');
                 if (existingImg) {
                   existingImg.remove();
                 }
@@ -17765,7 +17875,8 @@ async function initializeGame(matchId) {
               const slots = bench.querySelectorAll('.card-slot');
               // Clear all existing images first, then render the current bench
               slots.forEach(slot => {
-                const existingImg = slot.querySelector('img');
+                // [GAME-STATE-SYNC-FIX] Query for card images specifically (not tool thumbs)
+                const existingImg = slot.querySelector('img:not(.tool-thumb)');
                 if (existingImg) {
                   existingImg.remove();
                 }
@@ -17845,7 +17956,8 @@ async function initializeGame(matchId) {
               const slots = bench.querySelectorAll('.card-slot');
               // Clear all existing images first, then render the current bench
               slots.forEach(slot => {
-                const existingImg = slot.querySelector('img');
+                // [GAME-STATE-SYNC-FIX] Query for card images specifically (not tool thumbs)
+                const existingImg = slot.querySelector('img:not(.tool-thumb)');
                 if (existingImg) {
                   existingImg.remove();
                 }
@@ -18357,22 +18469,12 @@ async function handleOpponentAttack(actionData, isP1) {
   const attackerName = attackerImg.alt || attacker.name;
   showPopup(`${attackerName} used ${attack.name}${attack.damage > 0 ? ` for ${attack.damage} damage!` : '!'}`);
   
-  // Handle knock out - check both actionData.knocked and actual result from damageActiveOf
-  if (actualKnocked && typeof handleKnockOut === 'function' && typeof getActiveImage === 'function') {
-    const foeImg = getActiveImage(targetPk);
-    if (foeImg) {
-      const ended = await handleKnockOut(uiTarget, foeImg);
-      if (!ended && typeof beginPromotionFlow === 'function') {
-        // Check if there are benched Pokemon before triggering promotion
-        const benchDiv = uiTarget === 'player1' ? p1Bench : p2Bench;
-        if (benchDiv) {
-          const benchImgs = benchDiv.querySelectorAll('img');
-          if (benchImgs.length > 0) {
-            await beginPromotionFlow(uiTarget);
-          }
-        }
-      }
-    }
+  // [OPPONENT-ATTACK-FIX] Don't call handleKnockOut here - the attacker already handled it
+  // The knockout will be handled via the KNOCK_OUT action broadcast
+  // We only need to handle the visual damage here, not the game logic
+  if (actualKnocked) {
+    console.log('[OPPONENT-ATTACK-FIX] Knockout detected, but not handling here - will be handled via KNOCK_OUT action');
+    // The knockout will be handled by handleOpponentKnockOut when the KNOCK_OUT action is received
   }
 }
 
@@ -18396,7 +18498,8 @@ async function handleOpponentAbility(actionData, isP1) {
   const activeArea = typeof activeFor === 'function' ? activeFor(uiOwner) : null;
   if (activeArea) {
     const activeSlot = activeArea.querySelector('.card-slot');
-    const activeImg = activeSlot?.querySelector('img');
+    // [OPPONENT-ABILITY-FIX] Query for card image specifically (not tool thumb)
+    const activeImg = activeSlot?.querySelector('img:not(.tool-thumb)');
     if (activeImg && (
       activeImg.dataset.instanceId === source.instanceId ||
       (activeImg.dataset.set === source.set && String(activeImg.dataset.num) === String(source.num))
@@ -18409,7 +18512,8 @@ async function handleOpponentAbility(actionData, isP1) {
   if (!sourceImg) {
     const benchDiv = uiOwner === 'player1' ? p1Bench : p2Bench;
     if (benchDiv) {
-      const benchImgs = benchDiv.querySelectorAll('img');
+      // [OPPONENT-ABILITY-FIX] Query for card images specifically (not tool thumbs)
+      const benchImgs = benchDiv.querySelectorAll('img:not(.tool-thumb)');
       for (const img of benchImgs) {
         if (img.dataset.instanceId === source.instanceId ||
             (img.dataset.set === source.set && String(img.dataset.num) === String(source.num))) {
@@ -18522,7 +18626,8 @@ async function handleOpponentTrainer(actionData, isP1) {
         const isLeafCape = toolObj.set === 'A3' && toolObj.num === '147';
         if (isGiantCape || isLeafCape) {
           const hpBonus = isGiantCape ? 20 : 30;
-          const targetImg = targetSlot.querySelector('img');
+          // [TOOL-ATTACH-FIX] Query for card image specifically (not tool thumb)
+          const targetImg = targetSlot.querySelector('img:not(.tool-thumb)');
           if (targetImg) {
             const baseHp = parseInt(targetImg.dataset.hp || '0', 10);
             const curHp = parseInt(targetImg.dataset.chp || baseHp, 10);
@@ -18574,7 +18679,8 @@ async function handleOpponentTrainer(actionData, isP1) {
         });
         
         if (benchDiv) {
-          const benchImgs = benchDiv.querySelectorAll('img');
+          // [SABRINA-FIX] Query for card images specifically (not tool thumbs)
+          const benchImgs = benchDiv.querySelectorAll('img:not(.tool-thumb)');
           const benchImgArray = Array.from(benchImgs);
           console.log('[SABRINA-DEBUG] Bench Pokemon found:', {
             opponentOwner,
@@ -18647,7 +18753,8 @@ async function handleOpponentKnockOut(actionData, isP1) {
   const activeArea = typeof activeFor === 'function' ? activeFor(uiOwner) : null;
   if (activeArea) {
     const activeSlot = activeArea.querySelector('.card-slot');
-    const activeImg = activeSlot?.querySelector('img');
+    // [OPPONENT-KO-FIX] Query for card image specifically (not tool thumb)
+    const activeImg = activeSlot?.querySelector('img:not(.tool-thumb)');
     
     // Check if the active Pokemon matches (by instanceId or by set/num if instanceId doesn't match)
     const shouldRemove = activeImg && (
@@ -18656,9 +18763,10 @@ async function handleOpponentKnockOut(actionData, isP1) {
     );
     
     if (shouldRemove) {
-      // Clear the active slot - remove ALL images to prevent duplicates
-      const allImgs = activeSlot.querySelectorAll('img');
-      for (const imgToRemove of allImgs) {
+      // [OPPONENT-KO-FIX] Clear only card images (not tool thumbs) to prevent duplicates
+      // Tool thumbs will be handled by detachAttachments if needed
+      const allCardImgs = activeSlot.querySelectorAll('img:not(.tool-thumb)');
+      for (const imgToRemove of allCardImgs) {
         imgToRemove.remove();
       }
       if (typeof markSlot === 'function') {
@@ -19000,7 +19108,8 @@ async function handleOpponentRetreat(actionData, isP1) {
       
       if (!promotedImg || !promotedSlot) {
         // Check if the promoted Pokemon is already in the active slot (maybe it was already promoted)
-        const activeImg = activeSlot.querySelector('img');
+        // [RETREAT-FIX] Query for card image specifically (not tool thumb)
+        const activeImg = activeSlot.querySelector('img:not(.tool-thumb)');
         const isAlreadyActive = activeImg && activeImg.dataset.instanceId === promoted.instanceId;
         
         if (isAlreadyActive) {
@@ -19063,7 +19172,8 @@ async function handleOpponentRetreat(actionData, isP1) {
       
       if (promotedImg && promotedSlot) {
         console.log('[RETREAT-ENERGY-DEBUG] Starting retreat swap process');
-        const activeImg = activeSlot.querySelector('img');
+        // [RETREAT-FIX] Query for card image specifically (not tool thumb)
+        const activeImg = activeSlot.querySelector('img:not(.tool-thumb)');
         
         // [ISSUE-2: ENERGY VISUAL REMOVAL] Handle energy discard from retreat BEFORE swapping
         // Use the retreatCost and energyDiscarded from action data

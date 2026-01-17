@@ -2368,7 +2368,39 @@ const TRAINER_EFFECTS = {
     
     
 
-    const allPokemon = getAllPokemonImgs(pk);
+    // In V2, p1 is always "you" and p2 is always "opponent"
+    // So we always use 'p1' to get our own Pokemon, regardless of match player ID
+    const v2Pk = 'p1'; // Always use p1 because p1 is always "you" in V2
+    // Use globalThis.getAllPokemonImgs if available (V2 version), otherwise use local version
+    const getAllPokemonImgsFn = globalThis.getAllPokemonImgs || getAllPokemonImgs;
+    console.log('[RARE-CANDY] Using getAllPokemonImgs function:', {
+      isV2Version: getAllPokemonImgsFn === globalThis.getAllPokemonImgs,
+      isLocalVersion: getAllPokemonImgsFn === getAllPokemonImgs,
+      hasGlobalVersion: !!globalThis.getAllPokemonImgs,
+      functionName: getAllPokemonImgsFn?.name || 'anonymous',
+      v2Pk,
+      originalPk: pk,
+      owner
+    });
+    const allPokemon = getAllPokemonImgsFn(v2Pk);
+    console.log('[RARE-CANDY] All Pokemon in play:', {
+      originalPk: pk,
+      v2Pk: v2Pk,
+      owner,
+      count: allPokemon.length,
+      pokemon: allPokemon.map(img => ({
+        name: img.alt,
+        instanceId: img.dataset.instanceId,
+        set: img.dataset.set,
+        num: img.dataset.num,
+        number: img.dataset.number,
+        playedTurn: img.dataset.playedTurn,
+        turnNumber: globalThis.turnNumber,
+        __v2_playerId: img.__v2_playerId, // Log the player ID from the proxy
+        hasV2PlayerId: !!img.__v2_playerId
+      }))
+    });
+    
     const eligibleBasics = [];
     
     
@@ -2403,6 +2435,18 @@ const TRAINER_EFFECTS = {
     
     const metaResults = await Promise.all(metaPromises);
     
+    console.log('[RARE-CANDY] All Pokemon meta results:', {
+      count: metaResults.length,
+      results: metaResults.map(r => r ? {
+        name: r.meta?.name || r.img?.alt,
+        stage: r.stage,
+        playedTurn: r.playedTurn,
+        isFossil: r.isFossil,
+        turnNumber: globalThis.turnNumber,
+        isEligible: r.stage === 'basic' && r.playedTurn !== globalThis.turnNumber
+      } : null)
+    });
+    
     for (const result of metaResults) {
       if (!result) continue;
       
@@ -2415,9 +2459,33 @@ const TRAINER_EFFECTS = {
 
       if (stage === 'basic' && playedTurn !== globalThis.turnNumber) {
         eligibleBasics.push({ img, meta, isFossil });
+        console.log('[RARE-CANDY] Added eligible basic:', {
+          name: meta?.name || img?.alt,
+          playedTurn,
+          turnNumber: globalThis.turnNumber
+        });
       } else if (stage === 'basic' && playedTurn === globalThis.turnNumber) {
+        console.log('[RARE-CANDY] Skipped basic (played this turn):', {
+          name: meta?.name || img?.alt,
+          playedTurn,
+          turnNumber: globalThis.turnNumber
+        });
+      } else if (stage !== 'basic') {
+        console.log('[RARE-CANDY] Skipped (not basic):', {
+          name: meta?.name || img?.alt,
+          stage
+        });
       }
     }
+    
+    console.log('[RARE-CANDY] Eligible basics found:', {
+      count: eligibleBasics.length,
+      basics: eligibleBasics.map(b => ({
+        name: b.meta?.name || b.img?.alt,
+        playedTurn: b.img?.dataset?.playedTurn,
+        isFossil: b.isFossil
+      }))
+    });
     
     if (!eligibleBasics.length) {
       const msg = 'No eligible Basic Pokémon. (Basics cannot be evolved the turn they are played)';
@@ -2456,7 +2524,12 @@ const TRAINER_EFFECTS = {
     console.log('[RARE-CANDY] Stage 2 in hand check:', {
       handSize: hand.length,
       stage2Count: stage2InHand.length,
-      stage2Pokemon: stage2InHand.map(s => s.cardMeta?.name || s.handCard?.name)
+      stage2Pokemon: stage2InHand.map(s => ({
+        name: s.cardMeta?.name || s.handCard?.name,
+        set: s.handCard?.set,
+        num: s.handCard?.number || s.handCard?.num,
+        evolveFrom: s.cardMeta?.evolveFrom || s.cardMeta?.evolvesFrom
+      }))
     });
     
     if (!stage2InHand.length) {
@@ -2473,7 +2546,14 @@ const TRAINER_EFFECTS = {
       let basicName = normStr(basicImg.alt || basicMeta.name);
       const stage2Name = normStr(stage2Meta.name);
       
-      
+      console.log('[RARE-CANDY-MATCH] Starting evolution check:', {
+        basicName,
+        basicImgAlt: basicImg.alt,
+        basicMetaName: basicMeta.name,
+        stage2Name,
+        stage2MetaName: stage2Meta.name,
+        isFossil
+      });
 
       if (isFossil) {
 
@@ -2529,7 +2609,14 @@ const TRAINER_EFFECTS = {
       const basicRoot = basicName.substring(0, 4);
       const stage2Root = stage2Name.substring(0, 4);
       
+      console.log('[RARE-CANDY-MATCH] Root name check:', {
+        basicRoot,
+        stage2Root,
+        matches: basicRoot === stage2Root
+      });
+      
       if (basicRoot === stage2Root) {
+        console.log('[RARE-CANDY-MATCH] Root name match - returning true');
         return true;
       }
       
@@ -2537,7 +2624,13 @@ const TRAINER_EFFECTS = {
       if (basicName.length >= 4 && stage2Name.length >= 4) {
         const basicEnd = basicName.substring(basicName.length - 4);
         const stage2End = stage2Name.substring(stage2Name.length - 4);
+        console.log('[RARE-CANDY-MATCH] End name check:', {
+          basicEnd,
+          stage2End,
+          matches: basicEnd === stage2End && basicEnd.length >= 3
+        });
         if (basicEnd === stage2End && basicEnd.length >= 3) {
+          console.log('[RARE-CANDY-MATCH] End name match - returning true');
           return true;
         }
       }
@@ -2545,19 +2638,56 @@ const TRAINER_EFFECTS = {
 
       const stage1Name = normStr(stage2Meta.evolveFrom || stage2Meta.evolvesFrom || '');
       
-      if (!stage1Name) return false;
+      console.log('[RARE-CANDY-MATCH] Stage 2 evolves from:', {
+        stage2Name,
+        stage1Name,
+        stage2EvolveFrom: stage2Meta.evolveFrom,
+        stage2EvolvesFrom: stage2Meta.evolvesFrom
+      });
+      
+      if (!stage1Name) {
+        console.log('[RARE-CANDY-MATCH] No Stage 1 name found for Stage 2');
+        return false;
+      }
       
       const stage1Card = await findCardByName(stage1Name);
-      if (!stage1Card) return false;
+      if (!stage1Card) {
+        console.log('[RARE-CANDY-MATCH] Stage 1 card not found:', stage1Name);
+        return false;
+      }
+      
+      console.log('[RARE-CANDY-MATCH] Found Stage 1 card:', stage1Card);
       
       const stage1Meta = await globalThis.fetchCardMeta(stage1Card.set, stage1Card.num);
-      if (!stage1Meta) return false;
+      if (!stage1Meta) {
+        console.log('[RARE-CANDY-MATCH] Stage 1 meta not found:', stage1Card);
+        return false;
+      }
       
       const stage1EvolveFrom = normStr(stage1Meta.evolveFrom || stage1Meta.evolvesFrom || '');
       
-      return basicName === stage1EvolveFrom || 
-             basicName.includes(stage1EvolveFrom) ||
-             stage1EvolveFrom.includes(basicName);
+      console.log('[RARE-CANDY-MATCH] Stage 1 evolves from:', {
+        stage1Name,
+        stage1EvolveFrom,
+        basicName,
+        stage1MetaEvolveFrom: stage1Meta.evolveFrom,
+        stage1MetaEvolvesFrom: stage1Meta.evolvesFrom
+      });
+      
+      const matches = basicName === stage1EvolveFrom || 
+                     basicName.includes(stage1EvolveFrom) ||
+                     stage1EvolveFrom.includes(basicName);
+      
+      console.log('[RARE-CANDY-MATCH] Match result:', {
+        matches,
+        basicName,
+        stage1EvolveFrom,
+        exactMatch: basicName === stage1EvolveFrom,
+        basicIncludesStage1: basicName.includes(stage1EvolveFrom),
+        stage1IncludesBasic: stage1EvolveFrom.includes(basicName)
+      });
+      
+      return matches;
     }
     
 
@@ -2630,17 +2760,56 @@ const TRAINER_EFFECTS = {
     
     showPopup('Rare Candy: Choose a Basic Pokémon to evolve.');
     const uniqueBasics = [];
-    const basicMap = new Map();
+    const basicMap = new Map(); // Map from basicImg to pairs
+    const instanceIdMap = new Map(); // Map from instanceId to basicImg (for matching after selection)
     
     for (const pair of validPairs) {
+      const instanceId = pair.basicImg.__v2_pokemon?.instanceId || pair.basicImg.dataset?.instanceId;
+      
       if (!basicMap.has(pair.basicImg)) {
         basicMap.set(pair.basicImg, []);
         uniqueBasics.push(pair.basicImg);
+        if (instanceId) {
+          instanceIdMap.set(instanceId, pair.basicImg);
+        }
       }
       basicMap.get(pair.basicImg).push(pair);
     }
     
-    const chosenBasic = await awaitSelection(uniqueBasics);
+    console.log('[RARE-CANDY] Calling awaitSelection with:', {
+      uniqueBasicsCount: uniqueBasics.length,
+      hasGlobalAwaitSelection: !!globalThis.awaitSelection,
+      globalAwaitSelectionType: typeof globalThis.awaitSelection,
+      candidates: uniqueBasics.map(b => ({
+        alt: b.alt,
+        hasV2Pokemon: !!b.__v2_pokemon,
+        isDOMElement: b instanceof HTMLElement || b.tagName === 'IMG',
+        type: typeof b,
+        constructor: b.constructor?.name
+      }))
+    });
+    
+    // Use globalThis.awaitSelection if available (V2 version), otherwise use local version
+    // IMPORTANT: In V2, we MUST use globalThis.awaitSelection because it works with proxy objects
+    const selectionFn = globalThis.awaitSelection || awaitSelection;
+    console.log('[RARE-CANDY] Using selection function:', {
+      isGlobal: selectionFn === globalThis.awaitSelection,
+      isLocal: selectionFn === awaitSelection,
+      functionName: selectionFn?.name || 'anonymous'
+    });
+    
+    if (!selectionFn) {
+      throw new Error('No selection function available!');
+    }
+    
+    const chosenBasic = await selectionFn(uniqueBasics);
+    
+    console.log('[RARE-CANDY] Selection result:', {
+      chosen: !!chosenBasic,
+      chosenName: chosenBasic?.alt || chosenBasic?.__v2_pokemon?.name,
+      isNull: chosenBasic === null,
+      isUndefined: chosenBasic === undefined
+    });
     if (!chosenBasic) {
       throw new Error('Evolution cancelled.');
     }
@@ -2648,14 +2817,63 @@ const TRAINER_EFFECTS = {
     
 
     
-    const pairsForBasic = basicMap.get(chosenBasic);
+    // Find the original basicImg by instanceId (in case chosenBasic is a new proxy created from DOM element)
+    const chosenInstanceId = chosenBasic.__v2_pokemon?.instanceId || chosenBasic.dataset?.instanceId;
+    let originalBasicImg = chosenBasic;
+    if (chosenInstanceId && instanceIdMap.has(chosenInstanceId)) {
+      originalBasicImg = instanceIdMap.get(chosenInstanceId);
+      console.log('[RARE-CANDY] Found original basicImg by instanceId:', chosenInstanceId);
+    }
+    
+    const pairsForBasic = basicMap.get(originalBasicImg);
+    
+    if (!pairsForBasic || pairsForBasic.length === 0) {
+      console.error('[RARE-CANDY] No pairs found for chosen basic:', {
+        chosenBasic: chosenBasic,
+        originalBasicImg: originalBasicImg,
+        chosenInstanceId: chosenInstanceId,
+        basicMapKeys: Array.from(basicMap.keys()).map(k => ({
+          instanceId: k.__v2_pokemon?.instanceId || k.dataset?.instanceId,
+          alt: k.alt
+        }))
+      });
+      throw new Error('Could not find evolution pairs for selected Pokémon.');
+    }
     
     if (pairsForBasic.length === 1) {
       const { handCard, stage2Meta } = pairsForBasic[0];
       
-      // Double-check that the basic Pokemon belongs to the correct owner
-      const basicOwner = chosenBasic.closest('#player1') ? 'player1' : 'player2';
-      const finalOwner = basicOwner === owner ? owner : basicOwner;
+      // CRITICAL: Always use __v2_playerId from the proxy object (V2-compatible)
+      // In V2, the proxy has __v2_playerId which is the actual match player ID
+      // Use originalBasicImg if available (it's the original proxy with correct __v2_playerId)
+      // Otherwise use chosenBasic (which should also have __v2_playerId from awaitSelection)
+      const proxyToUse = originalBasicImg || chosenBasic;
+      const basicOwner = proxyToUse.__v2_playerId;
+      
+      if (!basicOwner) {
+        console.error('[RARE-CANDY] ERROR: Proxy has no __v2_playerId!', {
+          chosenBasic,
+          originalBasicImg,
+          proxyToUse,
+          hasV2Pokemon: !!proxyToUse.__v2_pokemon,
+          hasV2PlayerId: !!proxyToUse.__v2_playerId,
+          alt: proxyToUse.alt
+        });
+        throw new Error('Cannot determine Pokemon owner - missing __v2_playerId');
+      }
+      
+      // Use basicOwner directly - it's the actual match player ID from the proxy
+      const finalOwner = basicOwner;
+
+      console.log('[RARE-CANDY] Evolution owner check (single pair):', {
+        basicOwner,
+        finalOwner,
+        hasV2PlayerId: !!proxyToUse.__v2_playerId,
+        v2PlayerId: proxyToUse.__v2_playerId,
+        owner, // Log the original owner for debugging
+        usingOriginalBasicImg: proxyToUse === originalBasicImg,
+        usingChosenBasic: proxyToUse === chosenBasic
+      });
 
       chosenBasic.dataset.evolvedViaRareCandy = 'true';
       
@@ -2700,12 +2918,36 @@ const TRAINER_EFFECTS = {
       
       const { handCard, stage2Meta, actualOwner } = selectedPair;
       
-      // Use the actual owner from the selected pair, or fall back to the effect owner
-      const evolveOwner = actualOwner || owner;
+      // CRITICAL: Always use __v2_playerId from the proxy object (V2-compatible)
+      // In V2, the proxy has __v2_playerId which is the actual match player ID
+      // Use originalBasicImg if available (it's the original proxy with correct __v2_playerId)
+      // Otherwise use chosenBasic (which should also have __v2_playerId from awaitSelection)
+      const proxyToUse = originalBasicImg || chosenBasic;
+      const basicOwner = proxyToUse.__v2_playerId;
       
-      // Double-check that the basic Pokemon belongs to the correct owner
-      const basicOwner = chosenBasic.closest('#player1') ? 'player1' : 'player2';
-      const finalOwner = basicOwner === evolveOwner ? evolveOwner : basicOwner;
+      if (!basicOwner) {
+        console.error('[RARE-CANDY] ERROR: Proxy has no __v2_playerId!', {
+          chosenBasic,
+          originalBasicImg,
+          proxyToUse,
+          hasV2Pokemon: !!proxyToUse.__v2_pokemon,
+          hasV2PlayerId: !!proxyToUse.__v2_playerId,
+          alt: proxyToUse.alt
+        });
+        throw new Error('Cannot determine Pokemon owner - missing __v2_playerId');
+      }
+      
+      // Use basicOwner directly - it's the actual match player ID from the proxy
+      const finalOwner = basicOwner;
+
+      console.log('[RARE-CANDY] Evolution owner check (multiple pairs):', {
+        basicOwner,
+        finalOwner,
+        hasV2PlayerId: !!chosenBasic.__v2_playerId,
+        v2PlayerId: chosenBasic.__v2_playerId,
+        owner, // Log the original owner for debugging
+        actualOwner // Log actualOwner from selectedPair for debugging
+      });
 
       chosenBasic.dataset.evolvedViaRareCandy = 'true';
       

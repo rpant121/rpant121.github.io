@@ -324,7 +324,11 @@ Energy: Lightning</textarea>
   <div style="text-align: center; margin: 1rem 0;">
   <button id="startBattle">Start Battle</button>
   <button id="playOnline" style="margin-left: 1rem;">Play Online</button>
+  <button id="playOnlineV2" style="margin-left: 1rem; background: linear-gradient(135deg, #22c55e, #0ea5e9);">Play Online V2 (POC)</button>
   <button id="handTester" style="margin-left: 1rem;">Opening Hand Tester</button>
+  <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #9ca3af;">
+    <em>V2 is a proof-of-concept with clean architecture. Requires match ID from original online battle.</em>
+  </div>
 </div>
 
 <!-- Auth Modal -->
@@ -364,6 +368,57 @@ Energy: Lightning</textarea>
   </div>
 </div>
 
+<!-- V2 Lobby Modal -->
+<div id="v2LobbyModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10001; align-items: center; justify-content: center;">
+  <div style="background: #2a2f36; padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+    <h2 style="margin-top: 0; text-align: center; color: #22c55e;">Online Battle V2 - Lobby</h2>
+    <div id="v2LobbyError" style="color: #f87171; margin: 0.5rem 0; min-height: 1.5rem; text-align: center;"></div>
+    <div id="v2LobbyStatus" style="color: #9ca3af; margin: 0.5rem 0; min-height: 1.5rem; text-align: center; font-size: 0.9rem;"></div>
+    
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+      <button id="v2CreateRoomTab" style="flex: 1; padding: 0.75rem; background: #22c55e; border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer;">Create Room</button>
+      <button id="v2JoinRoomTab" style="flex: 1; padding: 0.75rem; background: #3f444b; border: none; color: #e5e7eb; border-radius: 8px; font-weight: 600; cursor: pointer;">Join Room</button>
+    </div>
+    
+    <div id="v2CreateRoomPanel" style="display: block;">
+      <div style="margin-bottom: 1rem;">
+        <label style="color: #e5e7eb; margin-bottom: 0.5rem; display: block;">Your Deck</label>
+        <textarea id="v2CreateRoomDeckInput" placeholder="Paste your decklist here...&#10;Example:&#10;2 Eevee B1 184&#10;2 Jolteon ex B1 81&#10;Energy: Lightning" style="width: 100%; min-height: 120px; padding: 0.75rem; background: #1e2227; border: 1px solid #3f444b; border-radius: 8px; color: #e5e7eb; font-family: monospace; font-size: 0.9rem; resize: vertical; box-sizing: border-box;"></textarea>
+        <div style="margin-top: 0.5rem;">
+          <label style="color: #e5e7eb; margin-bottom: 0.5rem; display: block; font-size: 0.9rem;">Energy Types (max 3)</label>
+          <div id="v2CreateRoomEnergyGrid" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+        </div>
+        <div id="v2CreateRoomDeckStatus" style="color: #9ca3af; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
+      </div>
+      <button id="v2CreateRoomBtn" style="width: 100%; padding: 0.75rem; background: linear-gradient(135deg, #22c55e, #0ea5e9); border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 1rem;">Create Room</button>
+      <div id="v2RoomCodeDisplay" style="display: none; margin-top: 1rem; padding: 1rem; background: #1e2227; border-radius: 8px; text-align: center;">
+        <div style="color: #9ca3af; font-size: 0.9rem; margin-bottom: 0.5rem;">Room Code:</div>
+        <div id="v2RoomCode" style="font-size: 2rem; font-weight: bold; color: #22c55e; letter-spacing: 0.2rem; font-family: monospace;"></div>
+        <div style="color: #9ca3af; font-size: 0.85rem; margin-top: 0.5rem;">Waiting for opponent to join...</div>
+      </div>
+    </div>
+    
+    <div id="v2JoinRoomPanel" style="display: none;">
+      <div style="margin-bottom: 1rem;">
+        <label style="color: #e5e7eb; margin-bottom: 0.5rem; display: block;">Room Code</label>
+        <input type="text" id="v2RoomCodeInput" placeholder="Enter 6-character room code" maxlength="6" style="width: 100%; padding: 0.75rem; background: #1e2227; border: 1px solid #3f444b; border-radius: 8px; color: #e5e7eb; font-size: 1.2rem; text-align: center; letter-spacing: 0.2rem; font-family: monospace; text-transform: uppercase; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="color: #e5e7eb; margin-bottom: 0.5rem; display: block;">Your Deck</label>
+        <textarea id="v2JoinRoomDeckInput" placeholder="Paste your decklist here...&#10;Example:&#10;2 Eevee B1 184&#10;2 Jolteon ex B1 81&#10;Energy: Lightning" style="width: 100%; min-height: 120px; padding: 0.75rem; background: #1e2227; border: 1px solid #3f444b; border-radius: 8px; color: #e5e7eb; font-family: monospace; font-size: 0.9rem; resize: vertical; box-sizing: border-box;"></textarea>
+        <div style="margin-top: 0.5rem;">
+          <label style="color: #e5e7eb; margin-bottom: 0.5rem; display: block; font-size: 0.9rem;">Energy Types (max 3)</label>
+          <div id="v2JoinRoomEnergyGrid" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+        </div>
+        <div id="v2JoinRoomDeckStatus" style="color: #9ca3af; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
+      </div>
+      <button id="v2JoinRoomBtn" style="width: 100%; padding: 0.75rem; background: linear-gradient(135deg, #22c55e, #0ea5e9); border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 1rem;">Join Room</button>
+    </div>
+    
+    <button id="v2CloseLobbyModal" style="width: 100%; padding: 0.5rem; background: transparent; border: 1px solid #3f444b; color: #e5e7eb; border-radius: 6px; cursor: pointer; margin-top: 1rem;">Cancel</button>
+  </div>
+</div>
+
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -373,6 +428,7 @@ Energy: Lightning</textarea>
 <script type="module">
 import { parseDecklist, fetchCardData, loadPocketSets } from './deckparser.js';
 import { initAuth, signUp, signIn, signInAnonymously, signOut, onAuthStateChanged, getCurrentUser } from './js/auth/auth.js';
+import { createRoom, joinRoomByCode, onRoomChange, startGameFromRoom } from './js/online/lobby.js';
 
 /* --- Energy pips --- */
 const ENERGY_ICONS={
@@ -625,6 +681,336 @@ document.getElementById('playOnline').onclick = () => {
   }
 };
 
+// V2 Lobby Modal Management
+let v2LobbyMode = 'create';
+let v2LobbyModal, v2LobbyError, v2LobbyStatus, v2CreateRoomPanel, v2JoinRoomPanel, v2RoomCodeDisplay, v2RoomCode, v2RoomCodeInput;
+
+// V2 Energy Grid Initialization
+function initV2EnergyGrid(gridId) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  grid.innerHTML = '';
+  Object.entries(ENERGY_ICONS).forEach(([type, url]) => {
+    const div = document.createElement('div');
+    div.className = 'energy-pip';
+    div.dataset.type = type;
+    div.style.cssText = 'width: 40px; height: 40px; border: 2px solid #3f444b; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #1e2227; transition: all 0.2s;';
+    div.innerHTML = `<img src="${url}" alt="${type}" style="width: 32px; height: 32px;">`;
+    grid.appendChild(div);
+  });
+  grid.addEventListener('click', e => {
+    const pip = e.target.closest('.energy-pip');
+    if (!pip) return;
+    const selected = [...grid.querySelectorAll('.energy-pip.selected')];
+    if (pip.classList.contains('selected')) {
+      pip.classList.remove('selected');
+      pip.style.borderColor = '#3f444b';
+      pip.style.background = '#1e2227';
+      return;
+    }
+    if (selected.length >= MAX_ENERGIES) {
+      alert(`You can select up to ${MAX_ENERGIES} energy types.`);
+      return;
+    }
+    pip.classList.add('selected');
+    pip.style.borderColor = '#facc15';
+    pip.style.background = '#3f444b';
+  });
+}
+
+function getV2SelectedEnergies(gridId) {
+  return [...document.querySelectorAll(`#${gridId} .energy-pip.selected`)].map(d => d.dataset.type);
+}
+
+// V2 Deck parsing function (similar to V1)
+async function parseDeckForV2Lobby(textareaId, energyGridId, statusId) {
+  const textarea = document.getElementById(textareaId);
+  const statusEl = document.getElementById(statusId);
+  if (!textarea || !statusEl) return null;
+
+  statusEl.textContent = 'Loading deck...';
+  statusEl.style.color = '#9ca3af';
+
+  try {
+    await loadPocketSets();
+    let text = textarea.value.trim();
+
+    // Detect Energy: line
+    const energyMatch = text.match(/^\s*Energy:\s*(.+)$/im);
+    let chosenEnergies = [];
+    if (energyMatch) {
+      const raw = energyMatch[1].split(/[,/]/).map(w => w.trim().toLowerCase());
+      const valid = Object.keys(ENERGY_ICONS);
+      chosenEnergies = raw.filter(w => valid.includes(w)).slice(0, MAX_ENERGIES);
+      
+      // Auto-select matching pips visually
+      const grid = document.getElementById(energyGridId);
+      if (grid) {
+        [...grid.querySelectorAll('.energy-pip')].forEach(p => {
+          const isSelected = chosenEnergies.includes(p.dataset.type);
+          p.classList.toggle('selected', isSelected);
+          p.style.borderColor = isSelected ? '#facc15' : '#3f444b';
+          p.style.background = isSelected ? '#3f444b' : '#1e2227';
+        });
+      }
+      
+      text = text.replace(/^\s*Energy:\s*.+$/im, '').trim();
+    }
+
+    // Get selected energies from grid if not from text
+    if (chosenEnergies.length === 0) {
+      chosenEnergies = getV2SelectedEnergies(energyGridId);
+    }
+
+    if (chosenEnergies.length === 0) {
+      statusEl.textContent = 'Please select at least one energy type';
+      statusEl.style.color = '#f87171';
+      return null;
+    }
+
+    const parsed = parseDecklist(text);
+    if (!parsed.length) {
+      statusEl.textContent = 'No valid cards found';
+      statusEl.style.color = '#f87171';
+      return null;
+    }
+
+    statusEl.textContent = `Loading ${parsed.length} cards...`;
+    const fetchPromises = parsed.map(c => fetchCardData(c));
+    const results = await Promise.all(fetchPromises);
+
+    const fetched = [];
+    for (let i = 0; i < results.length; i++) {
+      const card = results[i];
+      if (card && card.name) {
+        card.quantity = Number(parsed[i].quantity) || 1;
+        fetched.push(card);
+      }
+    }
+
+    const total = fetched.reduce((s, c) => s + (c.quantity || 0), 0);
+    if (total !== 20) {
+      statusEl.textContent = `Total: ${total} cards (expected 20)`;
+      statusEl.style.color = '#fbbf24';
+      return null;
+    }
+
+    statusEl.textContent = '✓ Deck ready!';
+    statusEl.style.color = '#22c55e';
+    return { deck: fetched, energy: chosenEnergies };
+  } catch (error) {
+    console.error('Error parsing deck:', error);
+    statusEl.textContent = 'Error parsing deck: ' + error.message;
+    statusEl.style.color = '#f87171';
+    return null;
+  }
+}
+
+function initV2Lobby() {
+  v2LobbyModal = document.getElementById('v2LobbyModal');
+  v2LobbyError = document.getElementById('v2LobbyError');
+  v2LobbyStatus = document.getElementById('v2LobbyStatus');
+  v2CreateRoomPanel = document.getElementById('v2CreateRoomPanel');
+  v2JoinRoomPanel = document.getElementById('v2JoinRoomPanel');
+  v2RoomCodeDisplay = document.getElementById('v2RoomCodeDisplay');
+  v2RoomCode = document.getElementById('v2RoomCode');
+  v2RoomCodeInput = document.getElementById('v2RoomCodeInput');
+  
+  if (!v2LobbyModal) return; // Modal not in DOM yet
+  
+  function showV2LobbyModal() {
+    v2LobbyModal.style.display = 'flex';
+    v2LobbyError.textContent = '';
+    v2LobbyStatus.textContent = '';
+    v2LobbyMode = 'create';
+    updateV2LobbyUI();
+  }
+  
+  function hideV2LobbyModal() {
+    v2LobbyModal.style.display = 'none';
+    v2LobbyError.textContent = '';
+    v2LobbyStatus.textContent = '';
+    if (v2RoomCodeDisplay) v2RoomCodeDisplay.style.display = 'none';
+    if (v2RoomCodeInput) v2RoomCodeInput.value = '';
+  }
+  
+  function updateV2LobbyUI() {
+    if (v2CreateRoomPanel) v2CreateRoomPanel.style.display = v2LobbyMode === 'create' ? 'block' : 'none';
+    if (v2JoinRoomPanel) v2JoinRoomPanel.style.display = v2LobbyMode === 'join' ? 'block' : 'none';
+    const createTab = document.getElementById('v2CreateRoomTab');
+    const joinTab = document.getElementById('v2JoinRoomTab');
+    if (createTab) createTab.style.background = v2LobbyMode === 'create' ? '#22c55e' : '#3f444b';
+    if (joinTab) joinTab.style.background = v2LobbyMode === 'join' ? '#22c55e' : '#3f444b';
+  }
+  
+  const createTab = document.getElementById('v2CreateRoomTab');
+  const joinTab = document.getElementById('v2JoinRoomTab');
+  const closeBtn = document.getElementById('v2CloseLobbyModal');
+  const createBtn = document.getElementById('v2CreateRoomBtn');
+  const joinBtn = document.getElementById('v2JoinRoomBtn');
+  
+  if (createTab) createTab.onclick = () => { v2LobbyMode = 'create'; updateV2LobbyUI(); v2LobbyError.textContent = ''; };
+  if (joinTab) joinTab.onclick = () => { v2LobbyMode = 'join'; updateV2LobbyUI(); v2LobbyError.textContent = ''; };
+  if (closeBtn) closeBtn.onclick = hideV2LobbyModal;
+  if (v2LobbyModal) v2LobbyModal.onclick = (e) => { if (e.target === v2LobbyModal) hideV2LobbyModal(); };
+  
+  // Initialize energy grids for V2
+  initV2EnergyGrid('v2CreateRoomEnergyGrid');
+  initV2EnergyGrid('v2JoinRoomEnergyGrid');
+  
+  if (createBtn) {
+    createBtn.onclick = async () => {
+      v2LobbyError.textContent = '';
+      v2LobbyStatus.textContent = 'Creating room...';
+      
+      try {
+        // Parse deck from textarea
+        const deckData = await parseDeckForV2Lobby('v2CreateRoomDeckInput', 'v2CreateRoomEnergyGrid', 'v2CreateRoomDeckStatus');
+        if (!deckData) {
+          throw new Error('Please enter a valid 20-card deck and select energy types');
+        }
+        
+        const result = await createRoom(deckData.deck, deckData.energy);
+        if (v2RoomCode) v2RoomCode.textContent = result.roomCode;
+        if (v2RoomCodeDisplay) v2RoomCodeDisplay.style.display = 'block';
+        v2LobbyStatus.textContent = 'Room created! Share the code with your opponent.';
+        
+        let roomChangeHandler = null;
+        roomChangeHandler = (room) => {
+          console.log('[V2-LOBBY] Room changed:', { status: room.status, hasMatchId: !!room.matchId, player2Id: !!room.player2Id });
+          
+          if (room.status === 'ready' && room.player2Id) {
+            // Both players are ready - start the game
+            v2LobbyStatus.textContent = 'Both players ready! Starting game...';
+            const user = getCurrentUser();
+            
+            // Only player 1 should start the game to avoid race conditions
+            if (user && user.uid === room.player1Id) {
+              console.log('[V2-LOBBY] Player 1 starting game...');
+              startGameFromRoom().then((matchId) => {
+                console.log('[V2-LOBBY] Match created:', matchId);
+                if (matchId) {
+                  // Use hash instead of query string to avoid server rewriting issues
+                  const redirectUrl = `${window.location.origin}${window.location.pathname.replace(/index\.html$/, '')}online-battle-v2.html#matchId=${encodeURIComponent(matchId)}`;
+                  console.log('[V2-LOBBY] Redirect URL:', redirectUrl);
+                  console.log('[V2-LOBBY] Current location:', window.location.href);
+                  window.location.replace(redirectUrl);
+                } else {
+                  v2LobbyError.textContent = 'Failed to create match';
+                }
+              }).catch(error => {
+                console.error('[V2-LOBBY] Error starting game:', error);
+                v2LobbyError.textContent = error.message || 'Failed to start game';
+              });
+            } else {
+              // Player 2 - wait for match to be created
+              console.log('[V2-LOBBY] Player 2 waiting for match...');
+              v2LobbyStatus.textContent = 'Waiting for host to start game...';
+            }
+          } else if (room.status === 'in-progress' && room.matchId) {
+            // Match was created - redirect both players
+            console.log('[V2-LOBBY] Match ready, redirecting:', room.matchId);
+            if (roomChangeHandler) {
+              onRoomChange(() => {}); // Remove old listener to prevent duplicate redirects
+            }
+            // Use hash instead of query string to avoid server rewriting issues
+            const redirectUrl = `${window.location.origin}${window.location.pathname.replace(/index\.html$/, '')}online-battle-v2.html#matchId=${encodeURIComponent(room.matchId)}`;
+            console.log('[V2-LOBBY] Redirect URL:', redirectUrl);
+            console.log('[V2-LOBBY] Current location:', window.location.href);
+            window.location.replace(redirectUrl);
+          }
+        };
+        
+        onRoomChange(roomChangeHandler);
+      } catch (error) {
+        console.error('Error creating room:', error);
+        v2LobbyError.textContent = error.message || 'Failed to create room';
+        v2LobbyStatus.textContent = '';
+      }
+    };
+  }
+  
+  if (joinBtn && v2RoomCodeInput) {
+    joinBtn.onclick = async () => {
+      v2LobbyError.textContent = '';
+      const code = v2RoomCodeInput.value.trim().toUpperCase();
+      
+      if (!code || code.length !== 6) {
+        v2LobbyError.textContent = 'Please enter a valid 6-character room code';
+        return;
+      }
+      
+      v2LobbyStatus.textContent = 'Joining room...';
+      
+      try {
+        // Parse deck from textarea
+        const deckData = await parseDeckForV2Lobby('v2JoinRoomDeckInput', 'v2JoinRoomEnergyGrid', 'v2JoinRoomDeckStatus');
+        if (!deckData) {
+          throw new Error('Please enter a valid 20-card deck and select energy types');
+        }
+        
+        await joinRoomByCode(code, deckData.deck, deckData.energy);
+        v2LobbyStatus.textContent = 'Joined room! Waiting for host to start game...';
+        
+        let joinRoomChangeHandler = null;
+        joinRoomChangeHandler = (room) => {
+          console.log('[V2-LOBBY-JOIN] Room changed:', { status: room.status, hasMatchId: !!room.matchId });
+          
+          if (room.status === 'in-progress' && room.matchId) {
+            console.log('[V2-LOBBY-JOIN] Match ready, redirecting:', room.matchId);
+            if (joinRoomChangeHandler) {
+              onRoomChange(() => {}); // Remove old listener to prevent duplicate redirects
+            }
+            // Use hash instead of query string to avoid server rewriting issues
+            const redirectUrl = `${window.location.origin}${window.location.pathname.replace(/index\.html$/, '')}online-battle-v2.html#matchId=${encodeURIComponent(room.matchId)}`;
+            console.log('[V2-LOBBY-JOIN] Redirect URL:', redirectUrl);
+            console.log('[V2-LOBBY-JOIN] Current location:', window.location.href);
+            window.location.replace(redirectUrl);
+          } else if (room.status === 'ready' && room.player2Id) {
+            // Both players ready, but player 2 waits for player 1 to start
+            v2LobbyStatus.textContent = 'Both players ready! Waiting for host to start game...';
+          }
+        };
+        
+        onRoomChange(joinRoomChangeHandler);
+      } catch (error) {
+        console.error('Error joining room:', error);
+        v2LobbyError.textContent = error.message || 'Failed to join room';
+        v2LobbyStatus.textContent = '';
+      }
+    };
+  }
+  
+  // Export show function
+  window.showV2LobbyModal = showV2LobbyModal;
+}
+
+document.getElementById('playOnlineV2').onclick = () => {
+  const user = getCurrentUser();
+  if (!user) {
+    showAuthModal();
+  } else {
+    // Initialize V2 lobby if not already done
+    if (!v2LobbyModal) {
+      initV2Lobby();
+    }
+    // Show the V2 lobby modal
+    if (v2LobbyModal) {
+      v2LobbyModal.style.display = 'flex';
+      if (v2LobbyError) v2LobbyError.textContent = '';
+      if (v2LobbyStatus) v2LobbyStatus.textContent = '';
+      v2LobbyMode = 'create';
+      // Update UI - need to define updateV2LobbyUI if it doesn't exist
+      if (v2CreateRoomPanel) v2CreateRoomPanel.style.display = 'block';
+      if (v2JoinRoomPanel) v2JoinRoomPanel.style.display = 'none';
+      const createTab = document.getElementById('v2CreateRoomTab');
+      const joinTab = document.getElementById('v2JoinRoomTab');
+      if (createTab) createTab.style.background = '#22c55e';
+      if (joinTab) joinTab.style.background = '#3f444b';
+    }
+  }
+};
+
 // Initialize auth and listen for state changes
 onAuthStateChanged((user) => {
   if (user) {
@@ -641,6 +1027,9 @@ onAuthStateChanged((user) => {
 window.addEventListener('DOMContentLoaded', async () => {
   // Initialize auth
   initAuth();
+  
+  // Initialize V2 lobby
+  initV2Lobby();
   
   // Pre-load sets in background
   loadPocketSets().catch(() => {});

@@ -11,13 +11,15 @@ export async function broadcastAction(actionType, actionData) {
   const matchId = getCurrentMatchId();
   const playerId = getCurrentPlayerId();
   
+  console.log('[BROADCAST] Broadcasting action:', { actionType, actionData, matchId, playerId });
+  
   if (!matchId || !playerId) {
-    console.warn('Cannot broadcast action: not in a match');
+    console.warn('[BROADCAST] Cannot broadcast action: not in a match', { matchId, playerId });
     return;
   }
 
   if (!window.firebaseDatabase) {
-    console.warn('Cannot broadcast action: Firebase not initialized');
+    console.warn('[BROADCAST] Cannot broadcast action: Firebase not initialized');
     // Queue action for later
     actionQueue.push({ actionType, actionData });
     return;
@@ -25,17 +27,21 @@ export async function broadcastAction(actionType, actionData) {
 
   try {
     const action = createAction(matchId, playerId, actionType, actionData);
+    console.log('[BROADCAST] Created action object:', action);
     const actionsRef = getMatchRef(matchId).child('actions');
     
     // Push action to Firebase
+    console.log('[BROADCAST] Pushing action to Firebase...');
     await actionsRef.push(action);
+    console.log('[BROADCAST] Action pushed successfully');
     
     // Clear queue if we successfully sent
     if (actionQueue.length > 0) {
       actionQueue = [];
     }
   } catch (error) {
-    console.error('Error broadcasting action:', error);
+    console.error('[BROADCAST] Error broadcasting action:', error);
+    console.error('[BROADCAST] Error stack:', error.stack);
     // Queue action for retry
     actionQueue.push({ actionType, actionData });
   }
@@ -68,6 +74,7 @@ export const ACTION_TYPES = {
   ATTACK: 'attack',
   ATTACH_ENERGY: 'attach_energy',
   PLAY_TRAINER: 'play_trainer',
+  PLAY_POKEMON: 'play_pokemon',
   USE_ABILITY: 'use_ability',
   EVOLVE: 'evolve',
   RETREAT: 'retreat',
@@ -81,7 +88,12 @@ export const ACTION_TYPES = {
   DAMAGE: 'damage',
   SHUFFLE_DECK: 'shuffle_deck',
   SEARCH_DECK: 'search_deck',
-  DISCARD: 'discard'
+  DISCARD: 'discard',
+  FORCE_SWITCH_SELECTION: 'force_switch_selection',
+  FORCE_SWITCH_SELECTED: 'force_switch_selected',
+  RESET_REQUEST: 'reset_request',
+  RESET_ACCEPTED: 'reset_accepted',
+  RESET_DECLINED: 'reset_declined'
 };
 
 // Helper functions for common actions
